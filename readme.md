@@ -71,8 +71,22 @@ proj-pymicetracking-panel/
    ```
 
 3. **Install dependencies**:
+
+   **For CPU-only installation** (works on all platforms):
    ```bash
    uv sync
+   ```
+
+   **For GPU acceleration** (Linux/Windows with NVIDIA GPU):
+   ```bash
+   # Install PyTorch with CUDA support first
+   uv add "torch[cuda]" "torchvision[cuda]" --extra-index-url https://download.pytorch.org/whl/cu121
+   uv sync
+   ```
+
+   **For macOS** (uses Metal Performance Shaders):
+   ```bash
+   uv sync  # MPS support is included automatically
    ```
 
 4. **Run the application**:
@@ -81,6 +95,13 @@ proj-pymicetracking-panel/
    ```
 
 The application will open automatically in your browser at `http://localhost:5006/main`
+
+### ⚠️ Troubleshooting
+
+If you encounter dependency conflicts:
+1. **Clean installation**: `rm -rf .venv && uv sync`
+2. **Use CPU mode**: The app automatically fallback to CPU if GPU is not available
+3. **Check Python version**: Requires Python ≥3.11
 
 ### Alternative Installation Methods
 
@@ -122,17 +143,17 @@ panel serve src/pymicetracking_panel/main.py --show
 Optional dependency groups for modular installation:
 
 ```bash
-# GPU acceleration (CUDA support)
-uv pip install "pymicetracking-panel[gpu]"
+# GPU acceleration (automatically detects CUDA/MPS)
+uv sync --extra gpu
 
-# Computer vision only (minimal YOLO)
-uv pip install "pymicetracking-panel[yolo]"
+# Computer vision models (YOLO)  
+uv sync --extra yolo
 
 # Analysis and plotting tools
-uv pip install "pymicetracking-panel[viz]"
+uv sync --extra viz
 
 # Development tools (testing, linting, formatting)
-uv pip install "pymicetracking-panel[dev]"
+uv sync --extra dev
 
 # Install all extras
 uv sync --all-extras

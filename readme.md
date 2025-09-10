@@ -91,7 +91,7 @@ proj-pymicetracking-panel/
 
 4. **Run the application**:
    ```bash
-   uv run panel serve src/pymicetracking_panel/main.py --show
+   uv run panel serve src/main.py --show
    ```
 
 The application will open automatically in your browser at `http://localhost:5006/main`
@@ -135,7 +135,7 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 pip install -e .
-panel serve src/pymicetracking_panel/main.py --show
+panel serve src/main.py --show
 ```
 
 ## Installation Extras

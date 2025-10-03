@@ -60,17 +60,23 @@ proj-pymicetracking-panel/
 ### Using UV (Recommended)
 
 1. **Install UV** (if not already installed):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
 
-2. **Clone and setup**:
+    **For Linux/MacOS**
+     ```bash
+     curl -LsSf https://astral.sh/uv/install.sh | sh
+     ```
+    **For Windows**
+    ```bash
+    powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+
+3. **Clone and setup**:
    ```bash
    git clone https://github.com/heltonmaia/proj-pymicetracking-panel.git
    cd proj-pymicetracking-panel
    ```
 
-3. **Install dependencies**:
+4. **Install dependencies**:
 
    **For CPU-only installation** (works on all platforms):
    ```bash
@@ -89,7 +95,7 @@ proj-pymicetracking-panel/
    uv sync  # MPS support is included automatically
    ```
 
-4. **Run the application**:
+5. **Run the application**:
    ```bash
    uv run panel serve src/main.py --show
    ```

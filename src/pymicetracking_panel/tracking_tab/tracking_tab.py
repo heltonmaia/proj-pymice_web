@@ -1320,57 +1320,85 @@ class TrackingTab:
             traceback.print_exc()
 
     def get_panel(self) -> pn.Column:
+        # Create info accordion
+        info_accordion = pn.Accordion(
+            ("ℹ️ About Tracking", pn.pane.Markdown(
+                "Track animals using YOLOv11 segmentation masks and save tracking data to .json format.\n\n"
+                "**Recorded data:**\n"
+                "- X,Y coordinates of animal's center of mass (calculated from segmentation mask)\n"
+                "- ROI positioning information (which ROI the animal is in)\n"
+                "- Frame-by-frame tracking metadata\n\n"
+                "All data is stored in JSON format for future analysis and visualization."
+            )),
+            active=[],  # Collapsed by default
+            width=900,
+        )
+
+        # YOLO Settings Accordion
+        yolo_settings_accordion = pn.Accordion(
+            ("⚙️ YOLO Settings - Configure YOLO model and detection parameters",
+             pn.Column(
+                self.select_model_name,
+                pn.Row(self.slider_confidence, self.slider_iou),
+                self.file_input,
+                pn.Spacer(height=15),
+             )),
+            active=[],  # Collapsed by default
+            width=900,
+        )
+
+        # Experiment Settings Accordion
+        experiment_settings_accordion = pn.Accordion(
+            ("🐁 Experiment Settings - Define experiment type, ROIs and tracking controls",
+             pn.Column(
+                pn.Row(self.select_experiment_type, self.select_roi),
+                pn.Spacer(height=15),
+                pn.Row(
+                    pn.Column(
+                        pn.pane.Markdown("**🎮 Tracking Controls**"),
+                        pn.Row(
+                            self.button_start_tracking,
+                            pn.Spacer(width=8),
+                            self.button_pause_tracking,
+                            pn.Spacer(width=8),
+                            self.button_stop_tracking,
+                        ),
+                        width=320,
+                    ),
+                    pn.Spacer(width=20),
+                    pn.Column(
+                        pn.pane.Markdown("**🎯 ROI Tools**"),
+                        pn.Row(
+                            self.button_clear_roi,
+                            pn.Spacer(width=15),
+                            self.button_save_roi_json,
+                        ),
+                        width=200,
+                    ),
+                ),
+                pn.Spacer(height=15),
+             )),
+            active=[],  # Collapsed by default
+            width=900,
+        )
+
         return pn.Column(
-            pn.Row(
-                pn.pane.Markdown(
-                    "## Tracking\n\n"
-                    "Track animals using YOLOv11 segmentation masks and save tracking data to .json format.\n\n"
-                    "**Recorded data:**\n"
-                    "- X,Y coordinates of animal's center of mass (calculated from segmentation mask)\n"
-                    "- ROI positioning information (which ROI the animal is in)\n"
-                    "- Frame-by-frame tracking metadata\n\n"
-                    "All data is stored in JSON format for future analysis and visualization."
-                )
-            ),
+            pn.pane.Markdown("## Tracking"),
+            info_accordion,
             pn.Spacer(height=10),
-            pn.pane.Markdown("### ⚙️ YOLO Settings"),
-            self.select_model_name,
-            pn.Row(self.slider_confidence, self.slider_iou),
-            self.file_input,
-            pn.Spacer(height=20),
-            pn.pane.Markdown("### 🐁 Experiment Settings"),
-            pn.Row(self.select_experiment_type, self.select_roi),
-            pn.Spacer(height=5),
-            pn.Row(
-                pn.Column(
-                    pn.pane.Markdown("**🎮 Tracking Controls**"),
-                    pn.Row(
-                        self.button_start_tracking,
-                        pn.Spacer(width=8),
-                        self.button_pause_tracking,
-                        pn.Spacer(width=8),
-                        self.button_stop_tracking,
-                    ),
-                    width=320,
-                ),
-                pn.Spacer(width=20),
-                pn.Column(
-                    pn.pane.Markdown("**🎯 ROI Tools**"),
-                    pn.Row(
-                        self.button_clear_roi,
-                        pn.Spacer(width=15),
-                        self.button_save_roi_json,
-                    ),
-                    width=200,
-                ),
-            ),
-            pn.Spacer(height=5),
+            yolo_settings_accordion,
+            pn.Spacer(height=10),
+            experiment_settings_accordion,
+            pn.Spacer(height=15),
             self.warning,
             self.progress_bar,
             self.frame_pane,
             pn.Spacer(height=10),
-            pn.pane.Markdown("**📊 Results**"),
-            pn.Row(self.button_download_json),
+            pn.Row(
+                pn.pane.Markdown("**📊 Results**"),
+                pn.Spacer(width=20),
+                self.button_download_json,
+            ),
             self.tracking_log,
             margin=(10, 0),
         )

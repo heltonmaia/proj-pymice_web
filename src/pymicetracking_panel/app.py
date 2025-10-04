@@ -19,7 +19,7 @@ synthetic_tab = get_synthetic_tab()
 extra_tools_tab = get_extra_tools_tab()
 
 control_tabs = pn.Tabs(
-    ("📷 Camera & Recording", camera_tab),
+    ("🎬 Video Experiment", camera_tab),
     ("🔎 Animal Tracking", tracking_tab),
     ("🧬 Ethological Analysis", ethological_tab),
     ("🌐 IRL Analysis", irl_tab),

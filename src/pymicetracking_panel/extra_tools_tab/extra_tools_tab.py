@@ -287,24 +287,34 @@ class ExtraToolsTab:
 
     def get_panel(self) -> pn.Column:
         """Return the main panel layout"""
+        # GPU Availability Test Accordion
+        gpu_test_accordion = pn.Accordion(
+            ("🔍 GPU Availability Test - Test if your GPU is available and working with PyTorch",
+             pn.Column(
+                pn.Row(self.gpu_basic_button, pn.Spacer(width=20), self.gpu_basic_result),
+                pn.Spacer(height=15),
+             )),
+            active=[],
+            width=900,
+        )
+
+        # YOLO Performance Test Accordion
+        yolo_test_accordion = pn.Accordion(
+            ("🎯 YOLO Performance Test - Test YOLOv11 performance on GPU vs CPU (downloads model if needed)",
+             pn.Column(
+                pn.Row(self.yolo_test_button, pn.Spacer(width=20), self.yolo_test_result),
+                pn.Spacer(height=15),
+             )),
+            active=[],
+            width=900,
+        )
+
         return pn.Column(
             pn.pane.Markdown("# 🛠️ Extra Tools", margin=(0, 0, 20, 0)),
-            # GPU Basic Test Section
-            pn.pane.Markdown("## 🔍 GPU Availability Test", margin=(0, 0, 10, 0)),
-            pn.pane.Markdown(
-                "Test if your GPU is available and working with PyTorch.",
-                margin=(0, 0, 15, 0),
-            ),
-            pn.Row(self.gpu_basic_button, pn.Spacer(width=20), self.gpu_basic_result),
-            pn.Spacer(height=30),
-            # YOLO GPU Test Section
-            pn.pane.Markdown("## 🎯 YOLO Performance Test", margin=(0, 0, 10, 0)),
-            pn.pane.Markdown(
-                "Test YOLOv11 performance on GPU vs CPU (downloads model if needed).",
-                margin=(0, 0, 15, 0),
-            ),
-            pn.Row(self.yolo_test_button, pn.Spacer(width=20), self.yolo_test_result),
-            pn.Spacer(height=30),
+            gpu_test_accordion,
+            pn.Spacer(height=10),
+            yolo_test_accordion,
+            pn.Spacer(height=20),
             # Status
             self.testing_status,
             margin=(20, 20),

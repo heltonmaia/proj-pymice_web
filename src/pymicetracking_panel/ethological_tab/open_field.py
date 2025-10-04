@@ -182,9 +182,16 @@ class OpenFieldTab:
         self.frame_pane.grid.visible = False
         self.frame_pane.toolbar_location = None
 
-        # Initial gray image - will be replaced when video is loaded
-        # No need to create initial image, it will be created in _display_frame
-        self.current_frame_render = None
+        # Initial placeholder to avoid MISSING_RENDERERS warning
+        # Create a gray placeholder image
+        placeholder_image = np.ones((640, 640, 3), dtype=np.uint8) * 240
+        img = Image.fromarray(placeholder_image)
+        img_array = np.array(img.transpose(Image.FLIP_TOP_BOTTOM).convert("RGBA"))
+        imview = img_array.view(np.uint32).reshape(img_array.shape[:2])
+
+        self.current_frame_render = self.frame_pane.image_rgba(
+            image=[imview], x=0, y=0, dw=640, dh=640
+        )
 
         # Store video dimensions - will be updated when video is loaded
         self.video_width = 640

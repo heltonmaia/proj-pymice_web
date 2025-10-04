@@ -1293,8 +1293,6 @@ class TrackingTab:
             # Create BytesIO object from the data
             file_obj = BytesIO(data_bytes)
             file_obj.seek(0)  # Ensure we're at the start of the data
-
-            print("Abcde")
             
             # Configure FileDownload widget
             self.button_save_roi_json.file = file_obj

@@ -2,7 +2,7 @@
 
 A comprehensive mouse tracking application with Panel interface and YOLO-based computer vision for behavioral analysis.
 
-## 🚀 Features
+## Features
 
 - **Camera & Recording**: Live camera feed integration and recording
 - **Animal Tracking**: YOLO-based mouse detection and tracking with GPU acceleration  
@@ -22,7 +22,7 @@ A comprehensive mouse tracking application with Panel interface and YOLO-based c
 - **GPU**: CUDA-compatible GPU recommended for optimal performance
 - **System**: Linux/Windows/macOS
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 proj-pymicetracking-panel/
@@ -60,17 +60,23 @@ proj-pymicetracking-panel/
 ### Using UV (Recommended)
 
 1. **Install UV** (if not already installed):
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
 
-2. **Clone and setup**:
+    **For Linux/MacOS**
+     ```bash
+     curl -LsSf https://astral.sh/uv/install.sh | sh
+     ```
+    **For Windows**
+    ```bash
+    powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+
+3. **Clone and setup**:
    ```bash
    git clone https://github.com/heltonmaia/proj-pymicetracking-panel.git
    cd proj-pymicetracking-panel
    ```
 
-3. **Install dependencies**:
+4. **Install dependencies**:
 
    **For CPU-only installation** (works on all platforms):
    ```bash
@@ -89,7 +95,7 @@ proj-pymicetracking-panel/
    uv sync  # MPS support is included automatically
    ```
 
-4. **Run the application**:
+5. **Run the application**:
    ```bash
    uv run panel serve src/main.py --show
    ```
@@ -173,36 +179,7 @@ cd proj-pymicetracking-panel
 ./setup-dev.sh
 ```
 
-### Manual Setup
-```bash
-# Install pre-commit hooks (runs black, isort, flake8 on each commit)
-pre-commit install
-```
 
-### Code Quality Tools
-
-The project uses the following tools to maintain code quality:
-
-- **Black**: Code formatter (88 character line length)
-- **isort**: Import sorter (compatible with Black)
-- **flake8**: Linter for style and error checking
-- **pre-commit**: Runs all tools automatically on commit
-
-### Running Tools Manually
-
-```bash
-# Format code
-black .
-
-# Sort imports
-isort .
-
-# Lint code
-flake8 src/ tests/
-
-# Run all pre-commit hooks
-pre-commit run --all-files
-```
 
 
 

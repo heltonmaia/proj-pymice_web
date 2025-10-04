@@ -4,6 +4,7 @@ import panel as pn
 
 from .file_handler import FileHandler
 from .heatmap_analysis import HeatmapAnalysis
+from .open_field import OpenFieldTab
 from .video_analysis import VideoAnalysis
 
 
@@ -22,6 +23,7 @@ class EthologicalTab:
         self.file_handler = FileHandler(self.project_root)
         self.video_analysis = VideoAnalysis(self.temp_dir, self.project_root)
         self.heatmap_analysis = HeatmapAnalysis(self.temp_dir)
+        self.open_field_tab = OpenFieldTab(self.project_root, self.temp_dir)
 
         # Video Analysis components
         self.video_input = pn.widgets.FileInput(
@@ -70,7 +72,7 @@ class EthologicalTab:
             "**Status:** Ready\n\nSelect video and JSON files to start analysis.",
             styles={"background": "#f8f9fa", "padding": "15px", "border-radius": "5px"},
             width=550,
-            height=250,
+            min_height=250,
         )
 
         # Download button component
@@ -120,7 +122,7 @@ class EthologicalTab:
             end=1.0,
             step=0.1,
             value=0.8,
-            width=250,
+            width=200,
         )
 
         # Movement analysis configuration
@@ -143,15 +145,14 @@ class EthologicalTab:
         )
 
         # Analysis type selection
-        self.analysis_type = pn.widgets.RadioBoxGroup(
+        self.analysis_type = pn.widgets.Select(
             name="Analysis Type:",
             value="complete",
-            options=[
-                ("complete", "Complete Panel"),
-                ("individual", "Individual Plots"),
-            ],
-            inline=False,
-            width=350,
+            options={
+                "Complete Panel": "complete",
+                "Individual Plots": "individual",
+            },
+            width=200,
         )
 
         self.generate_analysis_button = pn.widgets.Button(
@@ -176,7 +177,7 @@ class EthologicalTab:
             "**Status:** Ready\n\nSelect a tracking JSON file to start analysis.",
             styles={"background": "#f8f9fa", "padding": "15px", "border-radius": "5px"},
             width=550,
-            height=250,
+            min_height=250,
         )
 
         # Connect events
@@ -451,72 +452,96 @@ class EthologicalTab:
 
     def get_panel(self) -> pn.Column:
         """Return the main panel layout"""
-        return pn.Column(
-            pn.pane.Markdown("# 🧬 Ethological Analysis", margin=(0, 0, 20, 0)),
-            # Video Tracking Analysis
-            pn.pane.Markdown("## 📹 Video Tracking Analysis", margin=(0, 0, 10, 0)),
-            pn.Row(
-                # Left side - File inputs and options
-                pn.Column(
-                    pn.pane.Markdown("**File Selection:**", margin=(0, 0, 10, 0)),
-                    self.video_input,
-                    self.json_input,
-                    pn.Spacer(height=15),
-                    pn.pane.Markdown("**Analysis Options:**", margin=(0, 0, 10, 0)),
-                    self.show_info_panel,
-                    self.show_heatmap,
-                    pn.Spacer(height=15),
-                    pn.pane.Markdown("**Analysis Controls:**", margin=(0, 0, 10, 0)),
-                    pn.Row(
-                        self.start_analysis_button,
-                        self.abort_button,
-                        self.download_button,
+        # Video Tracking Analysis Accordion
+        video_tracking_accordion = pn.Accordion(
+            ("📹 Video Tracking Analysis - Generate annotated videos with tracking overlay",
+             pn.Column(
+                pn.Row(
+                    # Left side - File inputs and options
+                    pn.Column(
+                        pn.pane.Markdown("**File Selection:**", margin=(0, 0, 10, 0)),
+                        self.video_input,
+                        self.json_input,
+                        pn.Spacer(height=15),
+                        pn.pane.Markdown("**Analysis Options:**", margin=(0, 0, 10, 0)),
+                        self.show_info_panel,
+                        self.show_heatmap,
+                        pn.Spacer(height=15),
+                        pn.pane.Markdown("**Analysis Controls:**", margin=(0, 0, 10, 0)),
+                        pn.Row(
+                            self.start_analysis_button,
+                            self.abort_button,
+                            self.download_button,
+                        ),
+                        styles={
+                            "background": "#f8f4e6",
+                            "padding": "20px",
+                            "border-radius": "8px",
+                            "margin": "10px"
+                        },
+                        width=480,
                     ),
-                    styles={
-                        "background": "#f8f4e6",
-                        "padding": "20px",
-                        "border-radius": "8px",
-                        "margin": "10px"
-                    },
-                    width=480,
+                    pn.Spacer(width=20),
+                    # Right side - Status only
+                    pn.Column(self.unified_status, width=570),
                 ),
-                pn.Spacer(width=20),
-                # Right side - Status only
-                pn.Column(self.unified_status, width=570),
-            ),
-            pn.Spacer(height=15),
-            # Progress only
-            self.analysis_progress,
-            pn.Spacer(height=30),
-            pn.pane.Markdown("---"),
-            pn.Spacer(height=20),
-            # Movement Heatmap Analysis
-            pn.pane.Markdown("## 🔥 Movement Heatmap Analysis", margin=(0, 0, 10, 0)),
-            pn.Row(
+                pn.Spacer(height=15),
+                # Progress only
+                self.analysis_progress,
+             )),
+            active=[],
+            width=1100,
+        )
+
+        # Movement Analysis Accordion
+        movement_analysis_accordion = pn.Accordion(
+            ("🔥 Movement Analysis - Generate heatmaps, velocity plots and behavioral metrics",
+             pn.Row(
                 # Left side - File inputs and configuration
                 pn.Column(
                     self.heatmap_json_input,
-                    pn.Spacer(height=20),
-                    pn.pane.Markdown("**Heatmap Configuration:**", margin=(0, 0, 10, 0)),
-                    self.heatmap_bins,
-                    pn.Row(
-                        self.heatmap_colormap,
-                        pn.Spacer(width=10),
-                        self.heatmap_alpha,
+                    pn.Spacer(height=15),
+                    # Heatmap Parameters
+                    pn.pane.Markdown("**📊 Heatmap Parameters:**", margin=(0, 0, 8, 0)),
+                    pn.Column(
+                        self.heatmap_bins,
+                        pn.Row(
+                            self.heatmap_colormap,
+                            pn.Spacer(width=10),
+                            self.heatmap_alpha,
+                        ),
+                        styles={
+                            "background": "#f0f8ff",
+                            "padding": "10px",
+                            "border-radius": "5px",
+                        },
+                    ),
+                    pn.Spacer(height=12),
+                    # Velocity Analysis Parameters
+                    pn.pane.Markdown("**📈 Velocity Analysis Parameters:**", margin=(0, 0, 8, 0)),
+                    pn.Column(
+                        self.movement_threshold_percentile,
+                        self.velocity_bins,
+                        styles={
+                            "background": "#fff8f0",
+                            "padding": "10px",
+                            "border-radius": "5px",
+                        },
                     ),
                     pn.Spacer(height=15),
-                    pn.pane.Markdown("**Movement Analysis Configuration:**", margin=(0, 0, 10, 0)),
-                    self.movement_threshold_percentile,
-                    self.velocity_bins,
+                    pn.pane.Markdown("**Export & Analysis Options:**", margin=(0, 0, 8, 0)),
+                    pn.Row(
+                        pn.Column(
+                            pn.pane.Markdown("Export Format:", margin=(0, 0, 5, 0)),
+                            self.export_format,
+                        ),
+                        pn.Spacer(width=15),
+                        pn.Column(
+                            self.analysis_type,
+                        ),
+                    ),
                     pn.Spacer(height=15),
-                    pn.pane.Markdown("**Export & Analysis Options:**", margin=(0, 0, 10, 0)),
-                    pn.pane.Markdown("**Export Format:**", margin=(0, 0, 5, 0)),
-                    self.export_format,
-                    pn.Spacer(height=15),
-                    pn.pane.Markdown("**Analysis Mode:**", margin=(0, 0, 5, 0)),
-                    self.analysis_type,
-                    pn.Spacer(height=20),
-                    pn.pane.Markdown("**Actions:**", margin=(0, 0, 10, 0)),
+                    pn.pane.Markdown("**Actions:**", margin=(0, 0, 8, 0)),
                     pn.Row(
                         self.generate_analysis_button,
                         pn.Spacer(width=10),
@@ -533,7 +558,36 @@ class EthologicalTab:
                 pn.Spacer(width=20),
                 # Right side - Status
                 pn.Column(self.heatmap_status, width=570),
-            ),
+             )),
+            active=[],
+            width=1100,
+        )
+
+        # Open Field Accordion
+        open_field_accordion = pn.Accordion(
+            ("🔵 Open Field - Analyze anxiety behavior in circular arena with pose estimation",
+             self.open_field_tab.get_panel()),
+            active=[],
+            width=1100,
+        )
+
+        # Elevated Plus Maze Accordion
+        elevated_plus_maze_accordion = pn.Accordion(
+            ("🟣 Elevated Plus Maze - Analyze anxiety in cross-shaped maze with open/closed arms",
+             pn.pane.Markdown("*Coming soon...*", styles={"color": "#888", "font-style": "italic"})),
+            active=[],
+            width=1100,
+        )
+
+        return pn.Column(
+            pn.pane.Markdown("# 🧬 Ethological Analysis", margin=(0, 0, 20, 0)),
+            video_tracking_accordion,
+            pn.Spacer(height=10),
+            movement_analysis_accordion,
+            pn.Spacer(height=10),
+            open_field_accordion,
+            pn.Spacer(height=10),
+            elevated_plus_maze_accordion,
             margin=(20, 20),
         )
 

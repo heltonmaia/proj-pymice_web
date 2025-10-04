@@ -64,7 +64,11 @@ class CameraTab:
             name="📷 Camera:", options={"Click 'Detect Cameras' to scan": -1}, width=200
         )
         self.detect_cameras_button = pn.widgets.Button(
-            name="🔍 Detect Cameras", button_type="primary", width=150, height=35
+            name="🔍 Detect",
+            button_type="light",
+            width=100,
+            height=35,
+            styles={"background-color": "#e8e8e8"}  # Light gray background
         )
         self.resolution_select = pn.widgets.Select(
             name="📐 Resolution:",
@@ -295,34 +299,72 @@ class CameraTab:
             return None
 
     def get_panel(self) -> pn.Column:
-        return pn.Column(
-            pn.Row(
-                pn.Column(
-                    self.camera_select, pn.Spacer(height=5), self.detect_cameras_button
+        # Setup Accordion - Camera and resolution settings
+        setup_accordion = pn.Accordion(
+            ("🔧 Setup - Camera selection and resolution configuration",
+             pn.Column(
+                pn.Row(
+                    self.detect_cameras_button,
+                    pn.Spacer(width=10),
+                    self.camera_select,
+                    pn.Spacer(width=40),
+                    self.resolution_select,
+                    align="center",
                 ),
-                pn.Spacer(width=40),
-                self.resolution_select,
-                align="start",
-            ),
-            pn.Spacer(height=20),
-            pn.Row(
-                self.start_button,
-                self.stop_button,
-                pn.Spacer(width=40),
-                self.record_button,
-                self.stop_record_button,
-                align="center",
-            ),
-            pn.Spacer(height=15),
-            self.frame_pane,
+                pn.Spacer(height=15),
+             )),
+            active=[],  # Collapsed by default
+            width=900,
+        )
+
+        # Experiment Accordion - Recording controls and video display
+        experiment_accordion = pn.Accordion(
+            ("🎬 Experiment - Video streaming and recording controls",
+             pn.Column(
+                pn.Row(
+                    self.start_button,
+                    self.stop_button,
+                    pn.Spacer(width=40),
+                    self.record_button,
+                    self.stop_record_button,
+                    align="center",
+                ),
+                pn.Spacer(height=15),
+                self.frame_pane,
+                pn.Spacer(height=10),
+                pn.Row(self.download_widget, align="center"),
+                pn.Spacer(height=15),
+             )),
+            active=[],  # Collapsed by default
+            width=900,
+        )
+
+        # Status Accordion - Status information
+        status_accordion = pn.Accordion(
+            ("📊 Status - Camera and recording information",
+             pn.Column(
+                self.status_text,
+                pn.Spacer(height=5),
+                self.camera_info_text,
+                pn.Spacer(height=5),
+                self.recording_text,
+                pn.Spacer(height=5),
+                self.recording_info,
+                pn.Spacer(height=5),
+                self.debug_text,
+             )),
+            active=[],  # Collapsed by default
+            width=900,
+        )
+
+        return pn.Column(
+            pn.pane.Markdown("## Video Experiment"),
             pn.Spacer(height=10),
-            pn.Row(self.download_widget, align="center"),
+            setup_accordion,
             pn.Spacer(height=10),
-            self.status_text,
-            self.camera_info_text,
-            self.recording_text,
-            self.recording_info,
-            self.debug_text,
+            experiment_accordion,
+            pn.Spacer(height=10),
+            status_accordion,
             margin=(10, 0),
         )
 

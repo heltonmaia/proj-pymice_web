@@ -8,7 +8,16 @@ from .synthetic_tab.synthetic_tab import get_tab as get_synthetic_tab
 from .tracking_tab.tracking_tab import get_tab as get_tracking_tab
 
 # Panel configuration
-pn.extension()
+pn.extension(raw_css=[
+    """
+    .bk-panel-models-layout-Accordion .bk-header {
+        border-color: #555555 !important;
+    }
+    .bk-panel-models-layout-Accordion {
+        border-color: #555555 !important;
+    }
+    """
+])
 
 # Tabs
 camera_tab = get_camera_tab()
@@ -19,7 +28,7 @@ synthetic_tab = get_synthetic_tab()
 extra_tools_tab = get_extra_tools_tab()
 
 control_tabs = pn.Tabs(
-    ("📷 Camera & Recording", camera_tab),
+    ("🎬 Video Experiment", camera_tab),
     ("🔎 Animal Tracking", tracking_tab),
     ("🧬 Ethological Analysis", ethological_tab),
     ("🌐 IRL Analysis", irl_tab),

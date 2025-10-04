@@ -68,19 +68,30 @@ class HeatmapAnalysis:
             frames = []
             x_positions = []
             y_positions = []
+            total_frames = len(tracking_data)
+            skipped_frames = 0
 
             for frame_data in tracking_data:
                 if all(
                     key in frame_data
                     for key in ["frame_number", "centroid_x", "centroid_y"]
                 ):
-                    frames.append(frame_data["frame_number"])
-                    x_positions.append(frame_data["centroid_x"])
-                    y_positions.append(frame_data["centroid_y"])
+                    # Skip frames with None values
+                    if (frame_data["centroid_x"] is not None and
+                        frame_data["centroid_y"] is not None):
+                        frames.append(frame_data["frame_number"])
+                        x_positions.append(frame_data["centroid_x"])
+                        y_positions.append(frame_data["centroid_y"])
+                    else:
+                        skipped_frames += 1
 
             if not frames:
                 status_callback("**Status:** ❌ No position data found", "#f8d7da")
                 return
+
+            # Inform about skipped frames if any
+            if skipped_frames > 0:
+                print(f"⚠️  Skipped {skipped_frames} frames with missing position data ({skipped_frames/total_frames*100:.1f}%)")
 
             # Calculate movement metrics
             x_positions = np.array(x_positions)
@@ -179,8 +190,8 @@ class HeatmapAnalysis:
     ) -> None:
         """Generate complete analysis panel with all plots"""
         # Create comprehensive analysis figure
-        fig = plt.figure(figsize=(24, 18))
-        gs = fig.add_gridspec(3, 3, height_ratios=[2.5, 1.2, 1.2], width_ratios=[2.2, 1, 1], 
+        fig = plt.figure(figsize=(24, 14))
+        gs = fig.add_gridspec(2, 3, height_ratios=[2.5, 1.2], width_ratios=[1.5, 1, 1.5],
                              hspace=0.3, wspace=0.25)
 
         # Calculate additional statistics
@@ -243,9 +254,9 @@ class HeatmapAnalysis:
         # Plot 2: Statistics Summary
         ax2 = fig.add_subplot(gs[0, 2])
         ax2.axis("off")
+        ax2.set_title("Analysis Summary", fontsize=14, fontweight="bold", pad=10)
 
         stats_text = (
-            "Movement Analysis Summary\n"
             f"Total Frames: {len(frames)}\n"
             f"Duration: {len(frames)} frames\n"
             "\n"
@@ -270,119 +281,78 @@ class HeatmapAnalysis:
         )
 
         ax2.text(
-            0.02,
+            0.05,
             0.98,
             stats_text,
             transform=ax2.transAxes,
-            fontsize=9,
+            fontsize=11,
             verticalalignment="top",
             fontfamily="monospace",
-            bbox=dict(boxstyle="round", facecolor="lightgray", alpha=0.9, pad=0.5),
-            linespacing=1.1,
+            bbox=dict(boxstyle="round", facecolor="lightgray", alpha=0.9, pad=0.8),
+            linespacing=1.2,
             wrap=True,
         )
 
-        # Plot 3: Distance from center
+        # Plot 3: Movement velocity
         ax3 = fig.add_subplot(gs[1, 0])
-        ax3.plot(frames, distances_from_center, "b-", linewidth=1, alpha=0.7)
-        ax3.axhline(
-            y=np.mean(distances_from_center),
-            color="r",
-            linestyle="--",
-            label=f"Mean: {np.mean(distances_from_center):.1f}px",
-        )
-        ax3.set_title("Distance from Center of Mass", fontsize=13, fontweight="bold")
-        ax3.set_xlabel("Frame Number")
-        ax3.set_ylabel("Distance (pixels)")
-        ax3.grid(True, alpha=0.3)
-        ax3.legend()
-
-        # Plot 4: Movement velocity
-        ax4 = fig.add_subplot(gs[1, 1])
         if velocities:
             velocity_frames = frames[1:]
-            ax4.plot(velocity_frames, velocities, "g-", linewidth=1, alpha=0.7)
-            ax4.axhline(
+            ax3.plot(velocity_frames, velocities, "g-", linewidth=1, alpha=0.7)
+            ax3.axhline(
                 y=np.mean(velocities),
                 color="r",
                 linestyle="--",
                 label=f"Mean: {np.mean(velocities):.1f}px/frame",
             )
-            ax4.axhline(
+            ax3.axhline(
                 y=movement_threshold,
                 color="orange",
                 linestyle=":",
                 label=f"Movement threshold",
             )
-            ax4.set_title("Movement Velocity", fontsize=13, fontweight="bold")
-            ax4.set_xlabel("Frame Number")
-            ax4.set_ylabel("Velocity (pixels/frame)")
-            ax4.grid(True, alpha=0.3)
-            ax4.legend()
+            ax3.set_title("Movement Velocity", fontsize=13, fontweight="bold")
+            ax3.set_xlabel("Frame Number")
+            ax3.set_ylabel("Velocity (pixels/frame)")
+            ax3.grid(True, alpha=0.3)
+            ax3.legend()
 
-        # Plot 5: Velocity distribution
-        ax5 = fig.add_subplot(gs[1, 2])
+        # Plot 4: Velocity distribution
+        ax4 = fig.add_subplot(gs[1, 1])
         if velocities:
-            ax5.hist(
+            ax4.hist(
                 velocities,
                 bins=velocity_bins,
                 alpha=0.7,
                 color="purple",
                 edgecolor="black",
             )
-            ax5.axvline(
+            ax4.axvline(
                 x=np.mean(velocities),
                 color="r",
                 linestyle="--",
                 label=f"Mean: {np.mean(velocities):.1f}px/frame",
             )
-            ax5.axvline(
+            ax4.axvline(
                 x=movement_threshold,
                 color="orange",
                 linestyle=":",
                 label=f"Movement threshold",
             )
-            ax5.set_title("Velocity Distribution", fontsize=13, fontweight="bold")
-            ax5.set_xlabel("Velocity (pixels/frame)")
-            ax5.set_ylabel("Frequency")
-            ax5.legend()
+            ax4.set_title("Velocity Distribution", fontsize=13, fontweight="bold")
+            ax4.set_xlabel("Velocity (pixels/frame)")
+            ax4.set_ylabel("Frequency")
+            ax4.legend()
 
-        # Plot 6: Activity classification
-        ax6 = fig.add_subplot(gs[2, 0])
+        # Plot 5: Activity classification
+        ax5 = fig.add_subplot(gs[1, 2])
         if velocities:
             labels = ["Moving", "Stationary"]
             sizes = [1 - stationary_ratio, stationary_ratio]
             colors = ["#ff9999", "#66b3ff"]
-            ax6.pie(
+            ax5.pie(
                 sizes, labels=labels, autopct="%1.1f%%", colors=colors, startangle=90
             )
-            ax6.set_title("Activity Classification", fontsize=13, fontweight="bold")
-
-        # Plot 7: Movement directions
-        ax7 = fig.add_subplot(gs[2, 1], projection="polar")
-        if len(x_positions) > 1:
-            angles = []
-            for i in range(1, len(x_positions)):
-                dx = x_positions[i] - x_positions[i - 1]
-                dy = y_positions[i] - y_positions[i - 1]
-                angle = np.arctan2(dy, dx) * 180 / np.pi
-                angles.append(angle)
-
-            theta = np.array(angles) * np.pi / 180
-            ax7.hist(theta, bins=16, alpha=0.7, color="green")
-            ax7.set_title("Movement Directions", fontsize=13, fontweight="bold", pad=20)
-            ax7.set_theta_zero_location("E")
-            ax7.set_theta_direction(1)
-
-        # Plot 8: Cumulative distance
-        ax8 = fig.add_subplot(gs[2, 2])
-        if velocities:
-            cumulative_distance = np.cumsum(velocities)
-            ax8.plot(frames[1:], cumulative_distance, "orange", linewidth=2)
-            ax8.set_title("Cumulative Distance", fontsize=13, fontweight="bold")
-            ax8.set_xlabel("Frame Number")
-            ax8.set_ylabel("Cumulative Distance (pixels)")
-            ax8.grid(True, alpha=0.3)
+            ax5.set_title("Activity Classification", fontsize=13, fontweight="bold")
 
         plt.tight_layout(pad=2.0)
 
@@ -400,25 +370,41 @@ class HeatmapAnalysis:
         # Store path and enable download
         self.current_analysis_path = output_path
 
+        # Export velocity data to JSON
+        self._export_velocity_json(
+            base_name,
+            frames,
+            x_positions,
+            y_positions,
+            velocities,
+            distances_from_center,
+            center_x,
+            center_y,
+            total_distance,
+            movement_threshold,
+            stationary_ratio,
+        )
+
         # Success message
         file_size_kb = output_path.stat().st_size / 1024
+        json_path = self.temp_dir / f"{base_name}_velocity.json"
+        json_size_kb = json_path.stat().st_size / 1024 if json_path.exists() else 0
+
         success_msg = (
-            "**Status:** ✅ Complete Analysis Generated"
-            f"**File:** {output_path.name} ({file_size_kb:.1f} KB)"
-            "**Location:** ethological_tab/temp/"
-            "\n"
-            f"**Analysis Includes:**"
-            f"• High-resolution movement heatmap"
-            f"• Distance from center of mass analysis"
-            f"• Movement velocity analysis"
-            f"• Activity classification"
-            f"• Movement direction analysis"
-            f"• Cumulative distance tracking"
-            f"• Comprehensive statistics summary"
-            "\n"
-            f"**Key Results:**"
-            f"• Total distance: {total_distance:.1f}px"
-            f"• Stationary time: {stationary_ratio*100:.1f}%"
+            "**Status:** ✅ Complete Analysis Generated\n\n"
+            f"**Image File:** {output_path.name} ({file_size_kb:.1f} KB)\n\n"
+            f"**JSON File:** {base_name}_velocity.json ({json_size_kb:.1f} KB)\n\n"
+            "**Location:** ethological_tab/temp/\n\n"
+            f"**Analysis Includes:**\n\n"
+            f"• High-resolution movement heatmap\n\n"
+            f"• Movement velocity analysis\n\n"
+            f"• Velocity distribution histogram\n\n"
+            f"• Activity classification\n\n"
+            f"• Comprehensive statistics summary\n\n"
+            f"• Velocity data JSON export\n\n"
+            f"**Key Results:**\n\n"
+            f"• Total distance: {total_distance:.1f}px\n\n"
+            f"• Stationary time: {stationary_ratio*100:.1f}%\n\n"
             f"• Mean velocity: {np.mean(velocities) if velocities else 0:.1f}px/frame"
         )
 
@@ -512,36 +498,9 @@ class HeatmapAnalysis:
         plt.close()
         plot_count += 1
 
-        # 2. Distance from center
-        plt.figure(figsize=(10, 6))
-        plt.plot(frames, distances_from_center, "b-", linewidth=1, alpha=0.7)
-        plt.axhline(
-            y=np.mean(distances_from_center),
-            color="r",
-            linestyle="--",
-            label=f"Mean: {np.mean(distances_from_center):.1f}px",
-        )
-        plt.title("Distance from Center of Mass", fontsize=16, fontweight="bold")
-        plt.xlabel("Frame Number")
-        plt.ylabel("Distance (pixels)")
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-
-        output_path = (
-            self.temp_dir / f"{base_name}_02_distance_from_center.{format_ext}"
-        )
-        plt.savefig(
-            output_path,
-            format="eps" if format_ext == "eps" else "png",
-            dpi=dpi,
-            bbox_inches="tight",
-        )
-        plt.close()
-        plot_count += 1
-
         # Continue with other individual plots...
         if velocities:
-            # 3. Movement velocity
+            # 2. Movement velocity
             plt.figure(figsize=(10, 6))
             velocity_frames = frames[1:]
             plt.plot(velocity_frames, velocities, "g-", linewidth=1, alpha=0.7)
@@ -563,7 +522,7 @@ class HeatmapAnalysis:
             plt.grid(True, alpha=0.3)
             plt.legend()
 
-            output_path = self.temp_dir / f"{base_name}_03_velocity.{format_ext}"
+            output_path = self.temp_dir / f"{base_name}_02_velocity.{format_ext}"
             plt.savefig(
                 output_path,
                 format="eps" if format_ext == "eps" else "png",
@@ -573,7 +532,7 @@ class HeatmapAnalysis:
             plt.close()
             plot_count += 1
 
-            # 4. Velocity distribution
+            # 3. Velocity distribution
             plt.figure(figsize=(8, 6))
             plt.hist(
                 velocities,
@@ -600,7 +559,7 @@ class HeatmapAnalysis:
             plt.legend()
 
             output_path = (
-                self.temp_dir / f"{base_name}_04_velocity_distribution.{format_ext}"
+                self.temp_dir / f"{base_name}_03_velocity_distribution.{format_ext}"
             )
 
             plt.savefig(
@@ -612,7 +571,7 @@ class HeatmapAnalysis:
             plt.close()
             plot_count += 1
 
-            # 5. Activity classification
+            # 4. Activity classification
             plt.figure(figsize=(8, 8))
             labels = ["Moving", "Stationary"]
             sizes = [1 - stationary_ratio, stationary_ratio]
@@ -623,28 +582,7 @@ class HeatmapAnalysis:
             plt.title("Activity Classification", fontsize=16, fontweight="bold")
 
             output_path = (
-                self.temp_dir / f"{base_name}_05_activity_classification.{format_ext}"
-            )
-            plt.savefig(
-                output_path,
-                format="eps" if format_ext == "eps" else "png",
-                dpi=dpi,
-                bbox_inches="tight",
-            )
-            plt.close()
-            plot_count += 1
-
-            # 6. Cumulative distance
-            plt.figure(figsize=(10, 6))
-            cumulative_distance = np.cumsum(velocities)
-            plt.plot(frames[1:], cumulative_distance, "orange", linewidth=2)
-            plt.title("Cumulative Distance", fontsize=16, fontweight="bold")
-            plt.xlabel("Frame Number")
-            plt.ylabel("Cumulative Distance (pixels)")
-            plt.grid(True, alpha=0.3)
-
-            output_path = (
-                self.temp_dir / f"{base_name}_06_cumulative_distance.{format_ext}"
+                self.temp_dir / f"{base_name}_04_activity_classification.{format_ext}"
             )
             plt.savefig(
                 output_path,
@@ -660,29 +598,124 @@ class HeatmapAnalysis:
             self.temp_dir / f"{base_name}_01_heatmap.{format_ext}"
         )
 
+        # Export velocity data to JSON
+        self._export_velocity_json(
+            base_name,
+            frames,
+            x_positions,
+            y_positions,
+            velocities,
+            distances_from_center,
+            center_x,
+            center_y,
+            total_distance,
+            movement_threshold,
+            stationary_ratio,
+        )
+
         # Success message
+        json_path = self.temp_dir / f"{base_name}_velocity.json"
+        json_size_kb = json_path.stat().st_size / 1024 if json_path.exists() else 0
+
         success_msg = (
-            "**Status:** ✅ Individual Plots Generated"
-            "\n"
-            f"**Files Generated:** {plot_count} individual plots"
-            f"**Location:** ethological_tab/temp/"
-            f"**Format:** {format_ext.upper()}"
-            "\n"
-            f"**Plots Include:**"
-            f"• {base_name}_01_heatmap.{format_ext}"
-            f"• {base_name}_02_distance_from_center.{format_ext}"
-            f"• {base_name}_03_velocity.{format_ext}"
-            f"• {base_name}_04_velocity_distribution.{format_ext}"
-            f"• {base_name}_05_activity_classification.{format_ext}"
-            f"• {base_name}_06_cumulative_distance.{format_ext}"
-            "\n"
-            f"**Key Results:**"
-            f"• Total distance: {total_distance:.1f}px"
-            f"• Stationary time: {stationary_ratio*100:.1f}%"
+            "**Status:** ✅ Individual Plots Generated\n\n"
+            f"**Files Generated:** {plot_count} individual plots\n\n"
+            f"**JSON File:** {base_name}_velocity.json ({json_size_kb:.1f} KB)\n\n"
+            f"**Location:** ethological_tab/temp/\n\n"
+            f"**Format:** {format_ext.upper()}\n\n"
+            f"**Plots Include:**\n\n"
+            f"• {base_name}_01_heatmap.{format_ext}\n\n"
+            f"• {base_name}_02_velocity.{format_ext}\n\n"
+            f"• {base_name}_03_velocity_distribution.{format_ext}\n\n"
+            f"• {base_name}_04_activity_classification.{format_ext}\n\n"
+            f"**Data Export:**\n\n"
+            f"• {base_name}_velocity.json (velocity data)\n\n"
+            f"**Key Results:**\n\n"
+            f"• Total distance: {total_distance:.1f}px\n\n"
+            f"• Stationary time: {stationary_ratio*100:.1f}%\n\n"
             f"• Mean velocity: {np.mean(velocities) if velocities else 0:.1f}px/frame"
         )
 
         status_callback(success_msg, "#d4edda")
+
+    def _export_velocity_json(
+        self,
+        base_name: str,
+        frames: list[int],
+        x_positions: np.ndarray,
+        y_positions: np.ndarray,
+        velocities: list[float],
+        distances_from_center: np.ndarray,
+        center_x: float,
+        center_y: float,
+        total_distance: float,
+        movement_threshold: float,
+        stationary_ratio: float,
+    ) -> None:
+        """Export velocity and movement data to JSON file"""
+        try:
+            # Prepare velocity data per frame
+            velocity_data = []
+            for i, frame in enumerate(frames):
+                frame_data = {
+                    "frame_number": int(frame),
+                    "x_position": float(x_positions[i]),
+                    "y_position": float(y_positions[i]),
+                    "distance_from_center": float(distances_from_center[i]),
+                }
+
+                # Add velocity for frames after the first one
+                if i > 0:
+                    frame_data["velocity"] = float(velocities[i - 1])
+                else:
+                    frame_data["velocity"] = 0.0
+
+                velocity_data.append(frame_data)
+
+            # Prepare summary statistics
+            summary = {
+                "center_of_mass": {
+                    "x": float(center_x),
+                    "y": float(center_y),
+                },
+                "movement_statistics": {
+                    "total_distance": float(total_distance),
+                    "mean_velocity": float(np.mean(velocities)) if velocities else 0.0,
+                    "max_velocity": float(np.max(velocities)) if velocities else 0.0,
+                    "min_velocity": float(np.min(velocities)) if velocities else 0.0,
+                    "std_velocity": float(np.std(velocities)) if velocities else 0.0,
+                    "movement_threshold": float(movement_threshold),
+                    "stationary_ratio": float(stationary_ratio),
+                    "moving_ratio": float(1 - stationary_ratio),
+                },
+                "spatial_statistics": {
+                    "mean_distance_from_center": float(np.mean(distances_from_center)),
+                    "max_distance_from_center": float(np.max(distances_from_center)),
+                    "std_distance_from_center": float(np.std(distances_from_center)),
+                },
+                "metadata": {
+                    "total_frames": len(frames),
+                    "source_file": base_name,
+                }
+            }
+
+            # Combine data and summary
+            output_data = {
+                "summary": summary,
+                "velocity_data": velocity_data,
+            }
+
+            # Save to JSON file with "_velocity" suffix
+            json_output_path = self.temp_dir / f"{base_name}_velocity.json"
+            with open(json_output_path, "w") as f:
+                json.dump(output_data, f, indent=2)
+
+            print(f"✅ Velocity data exported to: {json_output_path}")
+
+        except Exception as e:
+            print(f"❌ Error exporting velocity JSON: {e}")
+            import traceback
+            traceback.print_exc()
 
     def download_analysis_image(
         self, status_callback: Callable[[str, str], None]

@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 
 import cv2 as cv
+import matplotlib.pyplot as plt
 import numpy as np
 import panel as pn
 from bokeh.events import Pan, PanEnd, PanStart
@@ -94,14 +95,14 @@ class OpenFieldTab:
             name="Upload Video",
             accept=".mp4,.avi,.mov,.mkv",
             multiple=False,
-            width=400,
+            width=320,
         )
 
         # Model selection
         self.model_select = pn.widgets.Select(
             name="YOLO Pose Model",
             options=self._get_pose_models(),
-            width=400,
+            width=320,
         )
 
         # ROI type (simplified - only circles)
@@ -111,10 +112,32 @@ class OpenFieldTab:
             width=200,
         )
 
+        # Keypoint selection for ROI detection
+        self.keypoint_select = pn.widgets.Select(
+            name="Keypoints for ROI Detection",
+            options={
+                "Nose only (N)": 1,
+                "Nose + Ears (N, LEar, REar)": 3,
+                "Head + Body Center (N, LEar, REar, BC)": 4,
+                "Body (Head + Tail Base)": 5,
+                "Body + Tail Middle": 6,
+                "All keypoints (Full body)": 7,
+            },
+            value=1,
+            width=300,
+        )
+
+        # Keypoint diagram pane
+        self.keypoint_diagram = pn.pane.PNG(
+            sizing_mode="fixed",
+            width=200,
+            height=250,
+        )
+
         # Buttons
         self.button_delete_current = pn.widgets.Button(
             name="❌ Delete Current",
-            button_type="danger",
+            button_type="light",
             width=140,
             disabled=True,
         )
@@ -162,8 +185,8 @@ class OpenFieldTab:
         self.status = pn.pane.Markdown(
             "**Status:** Ready\n\nUpload a video to start.",
             styles={"background": "#f8f9fa", "padding": "15px", "border-radius": "5px"},
-            width=400,
-            min_height=150,
+            width=640,
+            height=150,
         )
 
         # Frame display
@@ -200,6 +223,7 @@ class OpenFieldTab:
         # Connect events
         self.video_input.param.watch(self._on_video_upload, "value")
         self.roi_label_select.param.watch(self._on_label_change, "value")
+        self.keypoint_select.param.watch(self._on_keypoint_change, "value")
         self.frame_pane.on_event(PanStart, self._on_pan_start)
         self.frame_pane.on_event(Pan, self._on_pan)
         self.frame_pane.on_event(PanEnd, self._on_pan_end)
@@ -208,6 +232,9 @@ class OpenFieldTab:
         self.button_start_analysis.on_click(self._start_analysis)
         self.button_stop_analysis.on_click(self._stop_analysis)
         # FileDownload widget doesn't need on_click - it handles download automatically
+
+        # Initialize keypoint diagram
+        self._update_keypoint_diagram()
 
     def _get_pose_models(self) -> list[str]:
         """Get list of available pose models"""
@@ -222,6 +249,97 @@ class OpenFieldTab:
         current_label = event.new
         # Enable delete button only if current label has a ROI
         self.button_delete_current.disabled = current_label not in self.roi_circles
+
+    def _on_keypoint_change(self, event) -> None:
+        """Handle keypoint selection change"""
+        self._update_keypoint_diagram()
+
+    def _update_keypoint_diagram(self) -> None:
+        """Create and update the keypoint diagram"""
+        num_keypoints = self.keypoint_select.value
+
+        # Keypoint positions for drawing
+        # 7-keypoint mouse/rat model structure:
+        #       N (0)
+        #      /   \
+        #  LEar(1) REar(2)
+        #      \   /
+        #      BC (3)
+        #        |
+        #      TB (4)
+        #        |
+        #      TM (5)
+        #        |
+        #      TT (6)
+
+        positions = {
+            0: (0.5, 0.9),   # N (Nose)
+            1: (0.3, 0.75),  # LEar
+            2: (0.7, 0.75),  # REar
+            3: (0.5, 0.6),   # BC (Body Center)
+            4: (0.5, 0.45),  # TB (Tail Base)
+            5: (0.5, 0.3),   # TM (Tail Middle)
+            6: (0.5, 0.15),  # TT (Tail Tip)
+        }
+
+        labels = ["N", "LEar", "REar", "BC", "TB", "TM", "TT"]
+        connections = [(0, 1), (0, 2), (1, 3), (2, 3), (3, 4), (4, 5), (5, 6)]
+
+        fig, ax = plt.subplots(figsize=(3, 4), facecolor='white')
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+
+        # Draw connections (skeleton)
+        for i, j in connections:
+            if i < num_keypoints and j < num_keypoints:
+                x_vals = [positions[i][0], positions[j][0]]
+                y_vals = [positions[i][1], positions[j][1]]
+                ax.plot(x_vals, y_vals, 'o-', color='#2E86C1', linewidth=3, markersize=0, alpha=0.6)
+            else:
+                x_vals = [positions[i][0], positions[j][0]]
+                y_vals = [positions[i][1], positions[j][1]]
+                ax.plot(x_vals, y_vals, '--', color='#D5D8DC', linewidth=2, markersize=0, alpha=0.4)
+
+        # Draw keypoints
+        for idx in range(7):
+            x, y = positions[idx]
+            if idx < num_keypoints:
+                # Selected keypoints - highlighted
+                ax.scatter(x, y, s=400, c='#28B463', alpha=0.9, edgecolors='#1D8348', linewidth=3, zorder=5)
+                ax.text(x, y, labels[idx], ha='center', va='center', fontsize=9,
+                       fontweight='bold', color='white', zorder=6)
+            else:
+                # Unselected keypoints - grayed out
+                ax.scatter(x, y, s=300, c='#E5E8E8', alpha=0.7, edgecolors='#AEB6BF', linewidth=2, zorder=5)
+                ax.text(x, y, labels[idx], ha='center', va='center', fontsize=8,
+                       color='#808B96', zorder=6)
+
+        # Add title
+        ax.text(0.5, 0.98, '🐭 Keypoint Model', ha='center', va='top',
+               fontsize=11, fontweight='bold', color='#2C3E50')
+
+        # Add mouse silhouette outline for context (very light background)
+        from matplotlib.patches import Ellipse
+        # Body
+        body = Ellipse((0.5, 0.6), 0.35, 0.25, facecolor='#FDFEFE', edgecolor='#D5D8DC',
+                      linewidth=1.5, alpha=0.3, zorder=1)
+        ax.add_patch(body)
+        # Head
+        head = Ellipse((0.5, 0.82), 0.28, 0.2, facecolor='#FDFEFE', edgecolor='#D5D8DC',
+                      linewidth=1.5, alpha=0.3, zorder=1)
+        ax.add_patch(head)
+
+        plt.tight_layout(pad=0.5)
+
+        # Save to BytesIO
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight', facecolor='white')
+        buf.seek(0)
+        plt.close(fig)
+
+        # Update the pane
+        self.keypoint_diagram.object = buf
 
     def _on_video_upload(self, event) -> None:
         """Handle video upload"""
@@ -273,14 +391,27 @@ class OpenFieldTab:
 
             # Get video dimensions
             height, width = sample_frame.shape[:2]
+
+            # Check if dimensions changed from placeholder
+            dimensions_changed = (width != self.video_width or height != self.video_height)
+
             self.video_width = width
             self.video_height = height
 
             # Update frame pane dimensions BEFORE displaying anything
+            # Update both the figure size and the ranges to prevent distortion
             self.frame_pane.width = width
             self.frame_pane.height = height
+            self.frame_pane.frame_width = width
+            self.frame_pane.frame_height = height
             self.frame_pane.x_range = Range1d(0, width)
             self.frame_pane.y_range = Range1d(0, height)
+
+            # Force recreate renderer if dimensions changed
+            if dimensions_changed and self.current_frame_render is not None:
+                if self.current_frame_render in self.frame_pane.renderers:
+                    self.frame_pane.renderers.remove(self.current_frame_render)
+                self.current_frame_render = None
 
             # Show progress bar
             self.progress_bar.visible = True
@@ -353,19 +484,18 @@ class OpenFieldTab:
 
         height, width = frame.shape[:2]
 
-        # Update existing image or create new one
-        if (self.current_frame_render is not None and
-            hasattr(self, 'current_frame_render') and
-            self.current_frame_render in self.frame_pane.renderers):
-            # Update existing image data
-            self.current_frame_render.data_source.data["image"] = [imview]
+        # Update existing image renderer instead of removing/recreating
+        if self.current_frame_render is not None:
+            # Update the data source directly (no flicker)
+            self.current_frame_render.data_source.data = {
+                'image': [imview],
+                'x': [0],
+                'y': [0],
+                'dw': [width],
+                'dh': [height]
+            }
         else:
-            # Remove any existing images first
-            renderers_to_keep = [r for r in self.frame_pane.renderers
-                                if "ImageRGBA" not in str(type(r))]
-            self.frame_pane.renderers = renderers_to_keep
-
-            # Create new image with correct dimensions
+            # Create new image renderer (first time or after dimension change)
             self.current_frame_render = self.frame_pane.image_rgba(
                 image=[imview], x=0, y=0, dw=width, dh=height
             )
@@ -619,9 +749,29 @@ class OpenFieldTab:
             model_path = self.pose_models_dir / model_name
             try:
                 self.yolo_model = YOLO(str(model_path))
+
+                # Try to use GPU if available, fallback to CPU if error
                 if self.device == "cuda":
-                    self.yolo_model.to("cuda")
-                print(f"✅ Pose model loaded: {model_name}")
+                    try:
+                        self.yolo_model.to("cuda")
+                        print(f"✅ Pose model loaded: {model_name} (CUDA)")
+                    except Exception as cuda_error:
+                        print(f"⚠️ CUDA error, falling back to CPU: {cuda_error}")
+                        self.device = "cpu"
+                        self.yolo_model = YOLO(str(model_path))  # Reload on CPU
+                        print(f"✅ Pose model loaded: {model_name} (CPU)")
+                elif self.device == "mps":
+                    try:
+                        self.yolo_model.to("mps")
+                        print(f"✅ Pose model loaded: {model_name} (MPS)")
+                    except Exception as mps_error:
+                        print(f"⚠️ MPS error, falling back to CPU: {mps_error}")
+                        self.device = "cpu"
+                        self.yolo_model = YOLO(str(model_path))  # Reload on CPU
+                        print(f"✅ Pose model loaded: {model_name} (CPU)")
+                else:
+                    print(f"✅ Pose model loaded: {model_name} (CPU)")
+
             except Exception as e:
                 self._update_status(f"**Status:** ❌ Error loading model\n\n{str(e)}", "#f8d7da")
                 return
@@ -664,8 +814,31 @@ class OpenFieldTab:
             self._finish_analysis()
             return
 
-        # Run YOLO pose estimation
-        results = self.yolo_model(frame, verbose=False)
+        # Run YOLO pose estimation with error handling
+        try:
+            results = self.yolo_model(frame, verbose=False)
+        except Exception as inference_error:
+            # If CUDA error during inference, try to reload model on CPU
+            if "CUDA" in str(inference_error) and self.device != "cpu":
+                print(f"⚠️ CUDA error during inference, switching to CPU: {inference_error}")
+                self.device = "cpu"
+                model_name = self.model_select.value
+                model_path = self.pose_models_dir / model_name
+                self.yolo_model = YOLO(str(model_path))
+                print(f"✅ Model reloaded on CPU")
+                # Retry inference
+                try:
+                    results = self.yolo_model(frame, verbose=False)
+                except Exception as retry_error:
+                    print(f"❌ Error even on CPU: {retry_error}")
+                    self._update_status(f"**Status:** ❌ Inference error\n\n{str(retry_error)}", "#f8d7da")
+                    self._finish_analysis()
+                    return
+            else:
+                print(f"❌ Inference error: {inference_error}")
+                self._update_status(f"**Status:** ❌ Inference error\n\n{str(inference_error)}", "#f8d7da")
+                self._finish_analysis()
+                return
 
         # Extract keypoints
         frame_data = {
@@ -969,50 +1142,84 @@ class OpenFieldTab:
     def get_panel(self) -> pn.Column:
         """Return the panel layout"""
         return pn.Column(
-            pn.pane.Markdown("### 🔵 Open Field - Circular Arena Analysis"),
-            pn.Spacer(height=15),
+            # Top section: Configuration and Video Display
             pn.Row(
                 pn.Column(
-                    pn.pane.Markdown("**Configuration:**", margin=(0, 0, 10, 0)),
                     self.video_input,
                     self.model_select,
-                    pn.Spacer(height=10),
-                    pn.pane.Markdown("**Draw ROIs:**", margin=(0, 0, 5, 0)),
-                    self.roi_label_select,
+                    pn.Spacer(height=15),
+                    pn.pane.Markdown("**Keypoint Selection:**", margin=(0, 0, 8, 0)),
+                    self.keypoint_select,
                     pn.pane.Markdown(
-                        "*Drag on the video to create circular ROIs*",
-                        styles={"font-size": "11px", "color": "#666"},
+                        "*Select which keypoints determine ROI position*",
+                        styles={"font-size": "10px", "color": "#666"},
                     ),
-                    pn.Spacer(height=15),
-                    pn.pane.Markdown("**ROI Controls:**", margin=(0, 0, 10, 0)),
+                    pn.Spacer(height=10),
                     pn.Row(
-                        self.button_delete_current,
                         pn.Spacer(width=10),
-                        self.button_clear_rois,
+                        self.keypoint_diagram,
                     ),
-                    pn.Spacer(height=15),
-                    pn.pane.Markdown("**Analysis Controls:**", margin=(0, 0, 10, 0)),
-                    pn.Row(
-                        pn.Column(
-                            self.button_start_analysis,
-                            self.button_download,
-                        ),
-                        pn.Spacer(width=10),
-                        self.button_stop_analysis,
-                    ),
-                    pn.Spacer(height=15),
-                    self.status,
                     styles={
                         "background": "#f0f8ff",
                         "padding": "20px",
                         "border-radius": "8px",
+                        "margin": "10px"
                     },
-                    width=450,
+                    width=380,
                 ),
-                pn.Spacer(width=20),
+                pn.Spacer(width=15),
                 pn.Column(
                     self.progress_bar,
                     self.frame_pane,
+                    pn.Spacer(height=10),
+                    self.status,
+                    width=660,
                 ),
+            ),
+            pn.Spacer(height=15),
+            # Bottom section: ROI and Analysis Controls
+            pn.Column(
+                pn.Row(
+                    pn.Column(
+                        pn.pane.Markdown("**Draw ROIs:**", margin=(0, 0, 5, 0)),
+                        self.roi_label_select,
+                        pn.pane.Markdown(
+                            "*Drag on the video to create circular ROIs*",
+                            styles={"font-size": "11px", "color": "#666"},
+                        ),
+                        width=250,
+                    ),
+                    pn.Spacer(width=30),
+                    pn.Column(
+                        pn.pane.Markdown("**ROI Controls:**", margin=(0, 0, 10, 0)),
+                        self.button_delete_current,
+                        pn.Spacer(height=5),
+                        self.button_clear_rois,
+                        width=160,
+                    ),
+                    pn.Spacer(width=30),
+                    pn.Row(
+                        pn.Column(
+                            pn.pane.Markdown("**Analysis Controls:**", margin=(0, 0, 10, 0)),
+                            self.button_start_analysis,
+                            pn.Spacer(height=5),
+                            self.button_stop_analysis,
+                            width=160,
+                        ),
+                        pn.Spacer(width=20),
+                        pn.Column(
+                            pn.pane.Markdown("**Results:**", margin=(0, 0, 10, 0)),
+                            self.button_download,
+                            width=160,
+                        ),
+                    ),
+                ),
+                styles={
+                    "background": "#f9f9f9",
+                    "padding": "20px",
+                    "border-radius": "8px",
+                    "margin": "10px"
+                },
+                width=1070,
             ),
         )

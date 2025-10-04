@@ -8,7 +8,16 @@ from .synthetic_tab.synthetic_tab import get_tab as get_synthetic_tab
 from .tracking_tab.tracking_tab import get_tab as get_tracking_tab
 
 # Panel configuration
-pn.extension()
+pn.extension(raw_css=[
+    """
+    .bk-panel-models-layout-Accordion .bk-header {
+        border-color: #555555 !important;
+    }
+    .bk-panel-models-layout-Accordion {
+        border-color: #555555 !important;
+    }
+    """
+])
 
 # Tabs
 camera_tab = get_camera_tab()

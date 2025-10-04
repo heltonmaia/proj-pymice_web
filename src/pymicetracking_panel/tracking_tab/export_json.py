@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 
-def _convert_rois_to_dict(rois: list, circle_roi_data: dict = None, frame_height: int = None) -> list[dict]:
+def convert_rois_to_dict(rois: list, circle_roi_data: dict = None, frame_height: int = None) -> list[dict]:
     """Convert ROI objects to dictionary format following the expected JSON structure"""
     result = []
     
@@ -182,7 +182,7 @@ def export_tracking_data(
         "frames_without_detection": frames_without_detection,
         "yolo_detections": yolo_detections,
         "template_detections": template_detections,
-        "rois": _convert_rois_to_dict(rois, circle_roi_data, frame_height),
+        "rois": convert_rois_to_dict(rois, circle_roi_data, frame_height),
         "tracking_data": tracking_data,
     }
 

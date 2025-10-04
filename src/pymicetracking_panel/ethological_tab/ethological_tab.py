@@ -70,7 +70,7 @@ class EthologicalTab:
             "**Status:** Ready\n\nSelect video and JSON files to start analysis.",
             styles={"background": "#f8f9fa", "padding": "15px", "border-radius": "5px"},
             width=550,
-            height=250,
+            min_height=250,
         )
 
         # Download button component
@@ -120,7 +120,7 @@ class EthologicalTab:
             end=1.0,
             step=0.1,
             value=0.8,
-            width=250,
+            width=200,
         )
 
         # Movement analysis configuration
@@ -143,15 +143,14 @@ class EthologicalTab:
         )
 
         # Analysis type selection
-        self.analysis_type = pn.widgets.RadioBoxGroup(
+        self.analysis_type = pn.widgets.Select(
             name="Analysis Type:",
             value="complete",
-            options=[
-                ("complete", "Complete Panel"),
-                ("individual", "Individual Plots"),
-            ],
-            inline=False,
-            width=350,
+            options={
+                "Complete Panel": "complete",
+                "Individual Plots": "individual",
+            },
+            width=200,
         )
 
         self.generate_analysis_button = pn.widgets.Button(
@@ -176,7 +175,7 @@ class EthologicalTab:
             "**Status:** Ready\n\nSelect a tracking JSON file to start analysis.",
             styles={"background": "#f8f9fa", "padding": "15px", "border-radius": "5px"},
             width=550,
-            height=250,
+            min_height=250,
         )
 
         # Connect events
@@ -454,7 +453,7 @@ class EthologicalTab:
         return pn.Column(
             pn.pane.Markdown("# 🧬 Ethological Analysis", margin=(0, 0, 20, 0)),
             # Video Tracking Analysis
-            pn.pane.Markdown("## 📹 Video Tracking Analysis", margin=(0, 0, 10, 0)),
+            pn.pane.Markdown("## 📹 Video Tracking Analysis: Generates a video with tracking for visualization only", margin=(0, 0, 10, 0)),
             pn.Row(
                 # Left side - File inputs and options
                 pn.Column(
@@ -491,32 +490,53 @@ class EthologicalTab:
             pn.pane.Markdown("---"),
             pn.Spacer(height=20),
             # Movement Heatmap Analysis
-            pn.pane.Markdown("## 🔥 Movement Heatmap Analysis", margin=(0, 0, 10, 0)),
+            pn.pane.Markdown("## 🔥 Movement Analysis: Generates velocity figure and cumulative heatmap, plus a .json file with velocity data", margin=(0, 0, 10, 0)),
             pn.Row(
                 # Left side - File inputs and configuration
                 pn.Column(
                     self.heatmap_json_input,
-                    pn.Spacer(height=20),
-                    pn.pane.Markdown("**Heatmap Configuration:**", margin=(0, 0, 10, 0)),
-                    self.heatmap_bins,
-                    pn.Row(
-                        self.heatmap_colormap,
-                        pn.Spacer(width=10),
-                        self.heatmap_alpha,
+                    pn.Spacer(height=15),
+                    # Heatmap Parameters
+                    pn.pane.Markdown("**📊 Heatmap Parameters:**", margin=(0, 0, 8, 0)),
+                    pn.Column(
+                        self.heatmap_bins,
+                        pn.Row(
+                            self.heatmap_colormap,
+                            pn.Spacer(width=10),
+                            self.heatmap_alpha,
+                        ),
+                        styles={
+                            "background": "#f0f8ff",
+                            "padding": "10px",
+                            "border-radius": "5px",
+                        },
+                    ),
+                    pn.Spacer(height=12),
+                    # Velocity Analysis Parameters
+                    pn.pane.Markdown("**📈 Velocity Analysis Parameters:**", margin=(0, 0, 8, 0)),
+                    pn.Column(
+                        self.movement_threshold_percentile,
+                        self.velocity_bins,
+                        styles={
+                            "background": "#fff8f0",
+                            "padding": "10px",
+                            "border-radius": "5px",
+                        },
                     ),
                     pn.Spacer(height=15),
-                    pn.pane.Markdown("**Movement Analysis Configuration:**", margin=(0, 0, 10, 0)),
-                    self.movement_threshold_percentile,
-                    self.velocity_bins,
+                    pn.pane.Markdown("**Export & Analysis Options:**", margin=(0, 0, 8, 0)),
+                    pn.Row(
+                        pn.Column(
+                            pn.pane.Markdown("Export Format:", margin=(0, 0, 5, 0)),
+                            self.export_format,
+                        ),
+                        pn.Spacer(width=15),
+                        pn.Column(
+                            self.analysis_type,
+                        ),
+                    ),
                     pn.Spacer(height=15),
-                    pn.pane.Markdown("**Export & Analysis Options:**", margin=(0, 0, 10, 0)),
-                    pn.pane.Markdown("**Export Format:**", margin=(0, 0, 5, 0)),
-                    self.export_format,
-                    pn.Spacer(height=15),
-                    pn.pane.Markdown("**Analysis Mode:**", margin=(0, 0, 5, 0)),
-                    self.analysis_type,
-                    pn.Spacer(height=20),
-                    pn.pane.Markdown("**Actions:**", margin=(0, 0, 10, 0)),
+                    pn.pane.Markdown("**Actions:**", margin=(0, 0, 8, 0)),
                     pn.Row(
                         self.generate_analysis_button,
                         pn.Spacer(width=10),
@@ -534,6 +554,18 @@ class EthologicalTab:
                 # Right side - Status
                 pn.Column(self.heatmap_status, width=570),
             ),
+            pn.Spacer(height=30),
+            pn.pane.Markdown("---"),
+            pn.Spacer(height=20),
+            # Open Field Analysis
+            pn.pane.Markdown("## 🔵 Open Field: Specific analysis for Open Field experiments", margin=(0, 0, 10, 0)),
+            pn.pane.Markdown("*Coming soon...*", styles={"color": "#888", "font-style": "italic"}),
+            pn.Spacer(height=30),
+            pn.pane.Markdown("---"),
+            pn.Spacer(height=20),
+            # Elevated Plus Maze Analysis
+            pn.pane.Markdown("## 🟣 Elevated Plus Maze: Specific analysis for Elevated Plus Maze experiments", margin=(0, 0, 10, 0)),
+            pn.pane.Markdown("*Coming soon...*", styles={"color": "#888", "font-style": "italic"}),
             margin=(20, 20),
         )
 

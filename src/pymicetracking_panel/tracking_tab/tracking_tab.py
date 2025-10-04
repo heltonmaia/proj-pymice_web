@@ -1323,7 +1323,13 @@ class TrackingTab:
         return pn.Column(
             pn.Row(
                 pn.pane.Markdown(
-                    "## Tracking\nHere you can track animals and save the data in a .json file."
+                    "## Tracking\n\n"
+                    "Track animals using YOLOv11 segmentation masks and save tracking data to .json format.\n\n"
+                    "**Recorded data:**\n"
+                    "- X,Y coordinates of animal's center of mass (calculated from segmentation mask)\n"
+                    "- ROI positioning information (which ROI the animal is in)\n"
+                    "- Frame-by-frame tracking metadata\n\n"
+                    "All data is stored in JSON format for future analysis and visualization."
                 )
             ),
             pn.Spacer(height=10),

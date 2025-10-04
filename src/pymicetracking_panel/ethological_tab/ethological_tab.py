@@ -4,6 +4,7 @@ import panel as pn
 
 from .file_handler import FileHandler
 from .heatmap_analysis import HeatmapAnalysis
+from .open_field import OpenFieldTab
 from .video_analysis import VideoAnalysis
 
 
@@ -22,6 +23,7 @@ class EthologicalTab:
         self.file_handler = FileHandler(self.project_root)
         self.video_analysis = VideoAnalysis(self.temp_dir, self.project_root)
         self.heatmap_analysis = HeatmapAnalysis(self.temp_dir)
+        self.open_field_tab = OpenFieldTab(self.project_root, self.temp_dir)
 
         # Video Analysis components
         self.video_input = pn.widgets.FileInput(
@@ -558,8 +560,8 @@ class EthologicalTab:
             pn.pane.Markdown("---"),
             pn.Spacer(height=20),
             # Open Field Analysis
-            pn.pane.Markdown("## 🔵 Open Field: Specific analysis for Open Field experiments", margin=(0, 0, 10, 0)),
-            pn.pane.Markdown("*Coming soon...*", styles={"color": "#888", "font-style": "italic"}),
+            pn.pane.Markdown("## 🔵 Open Field: Circular arena for anxiety behavior analysis", margin=(0, 0, 10, 0)),
+            self.open_field_tab.get_panel(),
             pn.Spacer(height=30),
             pn.pane.Markdown("---"),
             pn.Spacer(height=20),

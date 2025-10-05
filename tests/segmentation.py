@@ -6,70 +6,83 @@ import numpy as np
 print("Teste de segmentacao")
 model = YOLO("src/pymicetracking_panel/tracking_tab/models/yolo_model.pt")
 
-results = model.predict("rato.png")
+def mice_position(img):
 
-# for result in results:
-    # print(result)
+    results = model.predict(img)
 
-x, y, w, h = results[0].boxes.xywh.cpu().numpy()[0]
+    # for result in results:
+        # print(result)
 
-img = cv.imread("rato.png")
+    x, y, w, h = results[0].boxes.xywh.cpu().numpy()[0]
 
-height, width, _ = img.shape
-center_point = np.array([(width+14)//2, (height-26)//2])
+    # img = cv.imread("rato.png")
 
-# mascara de segmentacao
-mask_tensor = results[0].masks.data[0]
-mask = mask_tensor.cpu().numpy().astype(np.uint8) * 255  # converte para [0,255]
-mask = cv.resize(mask, (img.shape[1], img.shape[0]))  # mesmo tamanho da img
-rato = cv.bitwise_and(img, img, mask=mask)
+    height, width, _ = img.shape
+    center_point = np.array([(width+14)//2, (height-26)//2])
 
-# coordenadas
-linhas, colunas = torch.nonzero(mask_tensor == 1, as_tuple=True)
-coords = torch.stack([colunas, linhas], dim=1).cpu().numpy()
+    # mascara de segmentacao
+    mask_tensor = results[0].masks.data[0]
+    mask = mask_tensor.cpu().numpy().astype(np.uint8) * 255  # converte para [0,255]
+    mask = cv.resize(mask, (img.shape[1], img.shape[0]))  # mesmo tamanho da img
+    rato = cv.bitwise_and(img, img, mask=mask)
 
-print(coords)
+    # coordenadas
+    linhas, colunas = torch.nonzero(mask_tensor == 1, as_tuple=True)
+    coords = torch.stack([colunas, linhas], dim=1).cpu().numpy()
 
-# distancias com o centro para comparar com o raio depois
-distancias = np.linalg.norm(coords - center_point, axis=1)
+    print(coords)
 
-# distancias calculadas - valor do raio, a mais proxima de 0 e a que leva às bordas
-distancias = abs(distancias - 160)
+    # distancias com o centro para comparar com o raio depois
+    distancias = np.linalg.norm(coords - center_point, axis=1)
 
-# menor distancia para traçar o ponto na borda
-print(f"Menor distancia: {distancias.min()}, index: {np.argmin(distancias)}, coord: {coords[np.argmin(distancias)]}")
-                                  
-# print()
-# ponto_na_borda =  coords[np.argmin(distancias)][1], coords[np.argmin(distancias)][0]
-# cv.circle(img, ponto_na_borda, 3, (0,0,255), 2)
+    # distancias calculadas - valor do raio, a mais proxima de 0 e a que leva às bordas
+    distancias = abs(distancias - 160)
 
-# proximos_r = np.where(np.isclose(distancias, 160, atol=10))
-# print(proximos_r)
+    # menor distancia para traçar o ponto na borda
+    print(f"Menor distancia: {distancias.min()}, index: {np.argmin(distancias)}, coord: {coords[np.argmin(distancias)]}")
+                                    
+    # print()
+    # ponto_na_borda =  coords[np.argmin(distancias)][1], coords[np.argmin(distancias)][0]
+    # cv.circle(img, ponto_na_borda, 3, (0,0,255), 2)
 
-# cv.circle(img, center_point, 79, (0,255,0), )
-# cv.circle(img, center_point, 162, (0,0,0), -1)
-# cv.imwrite("inner_circle.png", img)
+    # proximos_r = np.where(np.isclose(distancias, 160, atol=10))
+    # print(proximos_r)
 
-inner_circle = cv.imread("inner_circle.png")
-img_original = img
-cp_img = img
-img = img - inner_circle
-cp_img = cp_img - img
+    # cv.circle(img, center_point, 79, (0,255,0), )
+    # cv.circle(img, center_point, 162, (0,0,0), -1)
+    # cv.imwrite("inner_circle.png", img)
 
-mask_rato = np.all(img == rato, axis=-1)
-and_img = np.zeros_like(img)
-and_img[mask_rato] = img[mask_rato]
+    inner_circle = cv.imread("inner_circle.png")
+    img_original = img.copy
+    cp_img = img.copy()
+    img = img - inner_circle
+    cp_img = cp_img - img
 
-'''
-    Descricao do que será feito:
-    Processar a imagem original -> obter localização do polígono do rato
-    Desenhar círculo interno -> subtrair da imagem -> rato que está fora do círculo
-    Identificar qual parte do rato está dentro do círculo -> subtrair imagem rato fora do círculo da original
-    Intersecção entre as coordenadas do polígono que estão fora e o rato
+    mask_rato = np.all(img == rato, axis=-1)
+    and_img = np.zeros_like(img)
+    and_img[mask_rato] = img[mask_rato]
+
+    '''
+        Descricao do que será feito:
+        Processar a imagem original -> obter localização do polígono do rato
+        Desenhar círculo interno -> subtrair da imagem -> rato que está fora do círculo
+        Identificar qual parte do rato está dentro do círculo -> subtrair imagem rato fora do círculo da original
+        Intersecção entre as coordenadas do polígono que estão fora e o rato
+        
+    '''
     
-'''
+    return and_img, img, cp_img
+
+cap = cv.VideoCapture("")
 
 while True:
+    ret, frame = cap.read()
+    
+    if not ret:
+        break
+    
+    and_img, img, cp_img = mice_position(frame)
+    
     # cv.imshow("original", img_original)
     cv.imshow("interseccao do rato", and_img)
     cv.imshow("inner circle", img)

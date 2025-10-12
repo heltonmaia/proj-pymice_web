@@ -36,7 +36,7 @@ from threading import Timer
 
 from ultralytics import YOLO
 
-from .export_json import create_download_filename, export_tracking_data
+from .export_json import create_download_filename, export_tracking_data, convert_rois_to_dict
 from .processing.tracking import create_roi_mask, draw_rois, process_frame
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
@@ -277,12 +277,13 @@ class TrackingTab:
             disabled=True,
         )
 
-        self.button_save_roi_json = pn.widgets.Button(
-            name="💾 Save ROI",
+        self.button_save_roi_json = pn.widgets.FileDownload(
             button_type="primary",
+            label="💾 Save ROI",
             width=90,
             height=35,
             disabled=True,
+            auto=False,  # Don't auto-download, wait for user click
         )
 
         self.button_download_json = pn.widgets.FileDownload(
@@ -327,7 +328,7 @@ class TrackingTab:
 
         # buttons
         self.button_clear_roi.on_click(self._clear_roi)
-        self.button_save_roi_json.on_click(self._rois_to_json)
+        # self.button_save_roi_json.on_click(self._rois_to_json)
         self.button_start_tracking.on_click(self._start_tracking)
         print(f"✅ Start button callback registered: {self._start_tracking}")
         self.button_pause_tracking.on_click(self._pause_tracking)
@@ -357,7 +358,7 @@ class TrackingTab:
             )
             self.bounding_box.left = self.bounding_box.right = event.x
             self.bounding_box.bottom = self.bounding_box.top = event.y
-
+            
             # Add to frame pane for immediate visibility
             self.frame_pane.add_layout(self.bounding_box)
 
@@ -526,6 +527,8 @@ class TrackingTab:
             print(
                 f"video_loaded: {self.video_loaded}, button disabled: {self.button_start_tracking.disabled}"
             )
+        
+        self._rois_to_json()
 
     def _poly_annotation(self, event) -> None:
         if self.select_roi.value == "Polygon":
@@ -577,7 +580,9 @@ class TrackingTab:
                 self.rois.append(polygon)
         
                 self.poly_annotation_points_x, self.poly_annotation_points_y = [], []
-
+                self.button_save_roi_json.disabled = False
+                self._rois_to_json()
+                
             else:
                 dot = self.frame_pane.scatter(
                     x, y, size=10, color="blue", marker="circle_dot", alpha=0.8
@@ -1267,10 +1272,40 @@ class TrackingTab:
     def _hide_warning(self) -> None:
         self.warning.visible = False
 
-    def _rois_to_json(self, event) -> None:
+    def _rois_to_json(self) -> None:
         # ROI export functionality removed - ROIs are now included in the main tracking data export
-        pass
+        import json
+        from datetime import datetime
 
+        try:
+            # Validate required data
+            if not len(self.rois):
+                self._add_log_message("❌ No ROI loaded for download", "error")
+                return
+
+            json_string = json.dumps(convert_rois_to_dict(self.rois), indent=2)
+
+            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+
+            filename = f"rois_data_{timestamp}.json"
+            data_bytes = json_string.encode("utf-8")
+
+            # Create BytesIO object from the data
+            file_obj = BytesIO(data_bytes)
+            file_obj.seek(0)  # Ensure we're at the start of the data
+            
+            # Configure FileDownload widget
+            self.button_save_roi_json.file = file_obj
+            self.button_save_roi_json.filename = filename
+            self.button_save_roi_json.mime_type = "application/json"
+            
+        except Exception as e:
+            self._add_log_message(f"❌ Error preparing download: {str(e)}", "error")
+            print(f"Error configuring download: {e}")
+            import traceback
+
+            traceback.print_exc()    
+        
     def _configure_download(self) -> None:
         """Configure the download button with tracking data"""
         try:

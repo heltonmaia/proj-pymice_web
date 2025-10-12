@@ -2,19 +2,13 @@
   {
     "center_x": 314,
     "center_y": 194,
-    "radius": 40,
+    "radius": 10,
     "roi_type": "Circle"
   },
   {
     "center_x": 310,
     "center_y": 190,
-    "radius": 80,
-    "roi_type": "Circle"
-  },
-  {
-    "center_x": 307,
-    "center_y": 194,
-    "radius": 100,
+    "radius": 20,
     "roi_type": "Circle"
   }
 ]

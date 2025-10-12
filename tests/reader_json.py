@@ -40,10 +40,10 @@ def get_area(img, mice, json_path):
             
             print(mass_total/float(mass_total), mass_in, mass_out)
             
-            if mass_out > 0.4:
+            if mass_out > 0.6:
                 print("Mice jumped")
                 cv.putText(img, "Jumped", (10,50), cv.FONT_HERSHEY_COMPLEX_SMALL, 0.5,  (0,255,0), 2)
-            elif 0.3 <=mass_out <= 0.4:
+            elif 0.3 <=mass_out <= 0.6:
                 print("Mice standing")
                 cv.putText(img, "Standing", (10,50), cv.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (0,255,0), 2)
             else:

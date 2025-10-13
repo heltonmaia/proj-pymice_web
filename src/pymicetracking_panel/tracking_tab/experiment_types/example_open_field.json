@@ -1,0 +1,15 @@
+{
+  "preset_name": "example_open_field",
+  "description": "Example Open Field configuration with circular arena - Custom ROI configuration saved on 2025-10-12 19:50:00",
+  "timestamp": "2025-10-12T19:50:00",
+  "frame_width": 640,
+  "frame_height": 640,
+  "rois": [
+    {
+      "center_x": 320,
+      "center_y": 320,
+      "radius": 250,
+      "roi_type": "Circle"
+    }
+  ]
+}

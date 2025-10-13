@@ -1,0 +1,22 @@
+{
+  "preset_name": "teste1",
+  "description": "Custom ROI configuration saved on 2025-10-12 20:00:56",
+  "timestamp": "2025-10-12T20:00:56.390332",
+  "frame_width": 640,
+  "frame_height": 360,
+  "rois": [
+    {
+      "center_x": 305,
+      "center_y": 168,
+      "radius": 27,
+      "roi_type": "Circle"
+    },
+    {
+      "center_x": 448,
+      "center_y": 170,
+      "width": 81,
+      "height": 86,
+      "roi_type": "Rectangle"
+    }
+  ]
+}

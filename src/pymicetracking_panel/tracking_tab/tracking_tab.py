@@ -41,6 +41,7 @@ from .processing.tracking import create_roi_mask, draw_rois, process_frame
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 TEMP_DIR = os.path.join(os.path.dirname(__file__), "temp")
+EXPERIMENT_TYPES_DIR = os.path.join(os.path.dirname(__file__), "experiment_types")
 YOLO_RESOLUTION = (640, 640)
 ROI_TYPES = ["Rectangle", "Polygon", "Circle"]
 
@@ -117,6 +118,13 @@ class TrackingTab:
         self.circle_roi_data = (
             {}
         )  # Dict to store {roi_id: {center_x, center_y, radius}}
+
+        # ROI dragging state
+        self.dragging_roi = None  # The ROI currently being dragged
+        self.dragging_roi_type = None  # Type of ROI being dragged
+        self.drag_start_pos = {"x": 0, "y": 0}  # Initial click position
+        self.drag_roi_original_pos = {}  # Original position of the ROI
+        self.dragging_temp_annotation = None  # Temporary visual for dragging
 
         self.tracking_log = pn.pane.Markdown("", visible=False)
         self.log_messages = []  # Store all log messages
@@ -227,7 +235,21 @@ class TrackingTab:
         )
 
     def _experiment_type(self) -> None:
-        self.experiment_type = ["EPM", "OF_Rectangle", "OF_Circular_1", "OF_Circular_2"]
+        # Create experiment_types directory if it doesn't exist
+        os.makedirs(EXPERIMENT_TYPES_DIR, exist_ok=True)
+
+        # Default experiment types (simplified to 2 types only)
+        default_types = ["EPM", "OF"]
+
+        # Load saved presets from experiment_types directory
+        saved_presets = self._list_experiment_presets()
+
+        # Combine default types with saved presets
+        # Add separator if there are saved presets
+        if saved_presets:
+            self.experiment_type = default_types + ["──────────"] + saved_presets
+        else:
+            self.experiment_type = default_types
 
         self.select_experiment_type = pn.widgets.Select(
             name="Experiment Type", options=self.experiment_type
@@ -277,13 +299,36 @@ class TrackingTab:
             disabled=True,
         )
 
-        self.button_save_roi_json = pn.widgets.FileDownload(
+        # Preset name input and save button (initially hidden)
+        self.preset_name_input = pn.widgets.TextInput(
+            name="Preset Name:",
+            placeholder="Enter preset name...",
+            width=200,
+            visible=False,
+        )
+
+        self.button_confirm_save_preset = pn.widgets.Button(
+            name="✅ Save",
+            button_type="success",
+            width=70,
+            height=35,
+            visible=False,
+        )
+
+        self.button_cancel_save_preset = pn.widgets.Button(
+            name="❌ Cancel",
+            button_type="danger",
+            width=70,
+            height=35,
+            visible=False,
+        )
+
+        self.button_save_roi_json = pn.widgets.Button(
+            name="💾 Save ROI as Preset",
             button_type="primary",
-            label="💾 Save ROI",
-            width=90,
+            width=150,
             height=35,
             disabled=True,
-            auto=False,  # Don't auto-download, wait for user click
         )
 
         self.button_download_json = pn.widgets.FileDownload(
@@ -328,21 +373,415 @@ class TrackingTab:
 
         # buttons
         self.button_clear_roi.on_click(self._clear_roi)
-        # self.button_save_roi_json.on_click(self._rois_to_json)
+        self.button_save_roi_json.on_click(self._show_preset_name_input)
+        self.button_confirm_save_preset.on_click(self._confirm_save_preset)
+        self.button_cancel_save_preset.on_click(self._cancel_save_preset)
         self.button_start_tracking.on_click(self._start_tracking)
         print(f"✅ Start button callback registered: {self._start_tracking}")
         self.button_pause_tracking.on_click(self._pause_tracking)
         self.button_stop_tracking.on_click(self._stop_tracking)
 
-    # ROI Functions
-    def _bb_pan_start(self, event) -> None:
-        if self.select_roi.value == "Rectangle":
+        # Watch experiment type selection to load presets
+        self.select_experiment_type.param.watch(self._on_experiment_type_changed, "value")
+
+    # Preset Name Input Functions
+    def _show_preset_name_input(self, event) -> None:
+        """Show the preset name input field and confirmation buttons"""
+        self.preset_name_input.visible = True
+        self.preset_name_input.value = ""  # Clear previous input
+        self.button_confirm_save_preset.visible = True
+        self.button_cancel_save_preset.visible = True
+        self.button_save_roi_json.visible = False  # Hide the main button temporarily
+
+    def _cancel_save_preset(self, event) -> None:
+        """Cancel the preset saving operation"""
+        self.preset_name_input.visible = False
+        self.button_confirm_save_preset.visible = False
+        self.button_cancel_save_preset.visible = False
+        self.button_save_roi_json.visible = True  # Show the main button again
+        self.preset_name_input.value = ""  # Clear input
+
+    def _confirm_save_preset(self, event) -> None:
+        """Confirm and save the preset with the entered name"""
+        preset_name = self.preset_name_input.value.strip()
+
+        if not preset_name:
+            self.warning.object = "## Alert\n Please enter a preset name!"
+            self.warning.visible = True
+            self._thread_hide_warning()
+            return
+
+        # Check for invalid characters
+        invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+        if any(char in preset_name for char in invalid_chars):
+            self.warning.object = "## Alert\n Preset name contains invalid characters!"
+            self.warning.visible = True
+            self._thread_hide_warning()
+            return
+
+        # Save the preset
+        self._save_roi_preset(preset_name)
+
+        # Hide the input widgets
+        self.preset_name_input.visible = False
+        self.button_confirm_save_preset.visible = False
+        self.button_cancel_save_preset.visible = False
+        self.button_save_roi_json.visible = True
+
+    # Experiment Preset Management Functions
+    def _list_experiment_presets(self) -> list[str]:
+        """List all saved experiment presets from the experiment_types directory"""
+        try:
+            if not os.path.exists(EXPERIMENT_TYPES_DIR):
+                return []
+
+            # Get all .json files in the directory
+            preset_files = [
+                f.replace(".json", "")
+                for f in os.listdir(EXPERIMENT_TYPES_DIR)
+                if f.endswith(".json")
+            ]
+            return sorted(preset_files)
+        except Exception as e:
+            print(f"Error listing experiment presets: {e}")
+            return []
+
+    def _save_roi_preset(self, preset_name: str) -> None:
+        """Save current ROIs as a named preset"""
+        import json
+        from datetime import datetime
+
+        try:
+            if not self.rois:
+                self._add_log_message("❌ No ROIs to save", "error")
+                return
+
+            # Convert ROIs to dictionary format
+            rois_data = convert_rois_to_dict(
+                self.rois,
+                self.circle_roi_data,
+                self.frame_pane.height
+            )
+
+            # Create preset data structure
+            preset_data = {
+                "preset_name": preset_name,
+                "description": f"Custom ROI configuration saved on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "timestamp": datetime.now().isoformat(),
+                "frame_width": self.frame_pane.width,
+                "frame_height": self.frame_pane.height,
+                "rois": rois_data,
+            }
+
+            # Save to file
+            preset_path = os.path.join(EXPERIMENT_TYPES_DIR, f"{preset_name}.json")
+            with open(preset_path, "w") as f:
+                json.dump(preset_data, f, indent=2)
+
+            self._add_log_message(f"✅ Preset '{preset_name}' saved successfully", "info")
+
+            # Refresh the experiment type dropdown
+            self._refresh_experiment_type_list()
+
+        except Exception as e:
+            self._add_log_message(f"❌ Error saving preset: {str(e)}", "error")
+            print(f"Error saving preset: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _load_roi_preset(self, preset_name: str) -> None:
+        """Load ROIs from a saved preset"""
+        import json
+
+        try:
+            preset_path = os.path.join(EXPERIMENT_TYPES_DIR, f"{preset_name}.json")
+
+            if not os.path.exists(preset_path):
+                self._add_log_message(f"❌ Preset '{preset_name}' not found", "error")
+                return
+
+            # Load preset data
+            with open(preset_path, "r") as f:
+                preset_data = json.load(f)
+
+            # Check if video is loaded and dimensions match
             if not self.video_loaded:
-                self.warning.object = "## Alert\n Video is not loaded!"
+                self.warning.object = "## Alert\n Please load a video first!"
                 self.warning.visible = True
                 self._thread_hide_warning()
                 return
 
+            # Clear existing ROIs first
+            self._clear_roi(None)
+
+            # Load ROIs from preset
+            rois_data = preset_data.get("rois", [])
+            frame_height = self.frame_pane.height
+
+            for roi_data in rois_data:
+                roi_type = roi_data.get("roi_type", "")
+
+                if roi_type == "Rectangle":
+                    # Create Rectangle ROI
+                    center_x = roi_data["center_x"]
+                    center_y = roi_data["center_y"]
+                    width = roi_data["width"]
+                    height = roi_data["height"]
+
+                    left = center_x - width // 2
+                    right = center_x + width // 2
+                    # Convert from OpenCV coordinates to Bokeh coordinates
+                    top = frame_height - (center_y + height // 2)
+                    bottom = frame_height - (center_y - height // 2)
+
+                    roi_box = BoxAnnotation(
+                        top_units="data",
+                        bottom_units="data",
+                        left_units="data",
+                        right_units="data",
+                        fill_alpha=0.3,
+                        fill_color="red",
+                        line_color="red",
+                        line_width=2,
+                        top=top,
+                        bottom=bottom,
+                        right=right,
+                        left=left,
+                    )
+                    self.rois.append(roi_box)
+                    self.frame_pane.add_layout(roi_box)
+
+                elif roi_type == "Circle":
+                    # Create Circle ROI
+                    center_x = roi_data["center_x"]
+                    center_y = roi_data["center_y"]
+                    radius = roi_data["radius"]
+
+                    # Convert from OpenCV coordinates to Bokeh coordinates
+                    bokeh_center_y = frame_height - center_y
+
+                    size_value = radius * 2
+                    circle = self.frame_pane.scatter(
+                        [center_x],
+                        [bokeh_center_y],
+                        size=size_value,
+                        line_color="red",
+                        line_width=2,
+                        fill_alpha=0.3,
+                        fill_color="red",
+                        marker="circle",
+                    )
+
+                    # Store circle data
+                    circle_id = id(circle)
+                    self.circle_roi_data[circle_id] = {
+                        "center_x": center_x,
+                        "center_y": bokeh_center_y,
+                        "radius": radius,
+                    }
+                    self.rois.append(circle)
+
+                elif roi_type == "Polygon":
+                    # Create Polygon ROI
+                    vertices = roi_data.get("vertices", [])
+                    if vertices:
+                        # Convert from OpenCV coordinates to Bokeh coordinates
+                        xs = [v[0] for v in vertices]
+                        ys = [frame_height - v[1] for v in vertices]
+
+                        polygon = PolyAnnotation(
+                            fill_color="blue",
+                            fill_alpha=0.2,
+                            xs=xs,
+                            ys=ys,
+                        )
+                        self.rois.append(polygon)
+                        self.frame_pane.add_layout(polygon)
+
+            # Enable buttons
+            if self.rois:
+                self.button_clear_roi.disabled = False
+                self.button_start_tracking.disabled = False
+                self.button_save_roi_json.disabled = False
+
+            self._add_log_message(
+                f"✅ Loaded {len(self.rois)} ROI(s) from preset '{preset_name}'", "info"
+            )
+
+        except Exception as e:
+            self._add_log_message(f"❌ Error loading preset: {str(e)}", "error")
+            print(f"Error loading preset: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _refresh_experiment_type_list(self) -> None:
+        """Refresh the experiment type dropdown with updated presets"""
+        # Default experiment types (simplified to 2 types only)
+        default_types = ["EPM", "OF"]
+
+        # Load saved presets
+        saved_presets = self._list_experiment_presets()
+
+        # Combine and update options
+        if saved_presets:
+            self.experiment_type = default_types + ["──────────"] + saved_presets
+        else:
+            self.experiment_type = default_types
+
+        # Update the select widget
+        current_value = self.select_experiment_type.value
+        self.select_experiment_type.options = self.experiment_type
+
+        # Restore selection if it's still valid
+        if current_value in self.experiment_type:
+            self.select_experiment_type.value = current_value
+
+    def _on_experiment_type_changed(self, event) -> None:
+        """Handle experiment type selection change"""
+        selected = event.new
+
+        # Ignore if separator is selected
+        if selected == "──────────":
+            return
+
+        # Default types don't load presets
+        default_types = ["EPM", "OF"]
+        if selected in default_types:
+            return
+
+        # Load the selected preset
+        self._load_roi_preset(selected)
+
+    # ROI Hit Detection and Dragging Functions
+    def _cleanup_dragging_temp_annotation(self) -> None:
+        """Clean up any temporary dragging annotation"""
+        if self.dragging_temp_annotation is not None:
+            try:
+                # Try to remove from center (for BoxAnnotation and PolyAnnotation)
+                if hasattr(self.frame_pane, 'center') and self.dragging_temp_annotation in self.frame_pane.center:
+                    self.frame_pane.center.remove(self.dragging_temp_annotation)
+            except Exception as e:
+                print(f"Error removing temp annotation from center: {e}")
+
+            try:
+                # Try to remove from renderers (as backup)
+                if hasattr(self.frame_pane, 'renderers') and self.dragging_temp_annotation in self.frame_pane.renderers:
+                    self.frame_pane.renderers.remove(self.dragging_temp_annotation)
+            except Exception as e:
+                print(f"Error removing temp annotation from renderers: {e}")
+
+            self.dragging_temp_annotation = None
+
+    def _detect_roi_hit(self, x: float, y: float) -> tuple:
+        """
+        Detect if a click position hits an existing ROI.
+        Returns (roi, roi_type) if hit, (None, None) otherwise.
+        """
+        frame_height = self.frame_pane.height
+
+        # Check each ROI in reverse order (last drawn = on top)
+        for roi in reversed(self.rois):
+            roi_type_str = str(type(roi))
+
+            # Check Rectangle ROI
+            if "BoxAnnotation" in roi_type_str:
+                # Check if click is inside the rectangle
+                if (roi.left <= x <= roi.right and
+                    min(roi.top, roi.bottom) <= y <= max(roi.top, roi.bottom)):
+                    return (roi, "Rectangle")
+
+            # Check Circle ROI
+            elif "GlyphRenderer" in roi_type_str:
+                roi_id = id(roi)
+                if roi_id in self.circle_roi_data:
+                    circle_info = self.circle_roi_data[roi_id]
+                    center_x = circle_info["center_x"]
+                    center_y = circle_info["center_y"]
+                    radius = circle_info["radius"]
+
+                    # Check if click is inside the circle
+                    distance = math.sqrt((x - center_x)**2 + (y - center_y)**2)
+                    if distance <= radius:
+                        return (roi, "Circle")
+
+            # Check Polygon ROI
+            elif "PolyAnnotation" in roi_type_str:
+                if hasattr(roi, 'xs') and hasattr(roi, 'ys'):
+                    # Simple point-in-polygon test using ray casting
+                    vertices = list(zip(roi.xs, roi.ys))
+                    if self._point_in_polygon(x, y, vertices):
+                        return (roi, "Polygon")
+
+        return (None, None)
+
+    def _point_in_polygon(self, x: float, y: float, vertices: list) -> bool:
+        """Ray casting algorithm to check if point is inside polygon"""
+        n = len(vertices)
+        inside = False
+
+        p1x, p1y = vertices[0]
+        for i in range(1, n + 1):
+            p2x, p2y = vertices[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+
+        return inside
+
+    # ROI Functions
+    def _bb_pan_start(self, event) -> None:
+        if not self.video_loaded:
+            self.warning.object = "## Alert\n Video is not loaded!"
+            self.warning.visible = True
+            self._thread_hide_warning()
+            return
+
+        # Clean up any previous dragging temporary annotation
+        self._cleanup_dragging_temp_annotation()
+
+        # First check if we're clicking on an existing ROI to drag it
+        hit_roi, hit_roi_type = self._detect_roi_hit(event.x, event.y)
+
+        if hit_roi is not None:
+            # Start dragging existing ROI
+            self.dragging_roi = hit_roi
+            self.dragging_roi_type = hit_roi_type
+            self.drag_start_pos = {"x": event.x, "y": event.y}
+
+            # Store original position
+            if hit_roi_type == "Rectangle":
+                self.drag_roi_original_pos = {
+                    "left": hit_roi.left,
+                    "right": hit_roi.right,
+                    "top": hit_roi.top,
+                    "bottom": hit_roi.bottom,
+                }
+
+            elif hit_roi_type == "Circle":
+                roi_id = id(hit_roi)
+                if roi_id in self.circle_roi_data:
+                    circle_info = self.circle_roi_data[roi_id]
+                    self.drag_roi_original_pos = {
+                        "center_x": circle_info["center_x"],
+                        "center_y": circle_info["center_y"],
+                        "radius": circle_info["radius"],
+                    }
+
+            elif hit_roi_type == "Polygon":
+                self.drag_roi_original_pos = {
+                    "xs": list(hit_roi.xs),
+                    "ys": list(hit_roi.ys),
+                }
+
+            return
+
+        # Not clicking on existing ROI - proceed with drawing new ROI
+        if self.select_roi.value == "Rectangle":
             self.start_bounding_box["x"], self.start_bounding_box["y"] = (
                 event.x,
                 event.y,
@@ -358,17 +797,11 @@ class TrackingTab:
             )
             self.bounding_box.left = self.bounding_box.right = event.x
             self.bounding_box.bottom = self.bounding_box.top = event.y
-            
+
             # Add to frame pane for immediate visibility
             self.frame_pane.add_layout(self.bounding_box)
 
         elif self.select_roi.value == "Circle":
-            if not self.video_loaded:
-                self.warning.object = "## Alert\n Video is not loaded!"
-                self.warning.visible = True
-                self._thread_hide_warning()
-                return
-
             self.circle_start_point["x"], self.circle_start_point["y"] = (
                 event.x,
                 event.y,
@@ -393,13 +826,56 @@ class TrackingTab:
             )
 
     def _bb_pan(self, event) -> None:
-        if self.video_loaded and self.select_roi.value == "Rectangle":
+        if not self.video_loaded:
+            return
+
+        # If dragging an existing ROI, update its position
+        if self.dragging_roi is not None:
+            dx = event.x - self.drag_start_pos["x"]
+            dy = event.y - self.drag_start_pos["y"]
+
+            if self.dragging_roi_type == "Rectangle":
+                # Simply update the position properties
+                self.dragging_roi.left = self.drag_roi_original_pos["left"] + dx
+                self.dragging_roi.right = self.drag_roi_original_pos["right"] + dx
+                self.dragging_roi.top = self.drag_roi_original_pos["top"] + dy
+                self.dragging_roi.bottom = self.drag_roi_original_pos["bottom"] + dy
+
+            elif self.dragging_roi_type == "Circle":
+                # Move circle
+                roi_id = id(self.dragging_roi)
+                if roi_id in self.circle_roi_data:
+                    new_center_x = self.drag_roi_original_pos["center_x"] + dx
+                    new_center_y = self.drag_roi_original_pos["center_y"] + dy
+
+                    # Update circle data
+                    self.circle_roi_data[roi_id]["center_x"] = new_center_x
+                    self.circle_roi_data[roi_id]["center_y"] = new_center_y
+
+                    # Update visual representation
+                    self.dragging_roi.data_source.data = {
+                        "x": [new_center_x],
+                        "y": [new_center_y],
+                        "size": self.dragging_roi.data_source.data.get("size", [20]),
+                    }
+
+            elif self.dragging_roi_type == "Polygon":
+                # Simply update the polygon vertices
+                new_xs = [x + dx for x in self.drag_roi_original_pos["xs"]]
+                new_ys = [y + dy for y in self.drag_roi_original_pos["ys"]]
+                self.dragging_roi.xs = new_xs
+                self.dragging_roi.ys = new_ys
+
+            return
+
+        # Not dragging - proceed with normal drawing
+        if self.select_roi.value == "Rectangle":
             self.bounding_box.left = min(self.start_bounding_box["x"], event.x)
             self.bounding_box.right = max(self.start_bounding_box["x"], event.x)
             self.bounding_box.top = min(self.start_bounding_box["y"], event.y)
             self.bounding_box.bottom = max(self.start_bounding_box["y"], event.y)
 
-        elif self.video_loaded and self.select_roi.value == "Circle":
+        elif self.select_roi.value == "Circle":
             # Calculate radius from start point to current position
             center_x = self.circle_start_point["x"]
             center_y = self.circle_start_point["y"]
@@ -420,7 +896,20 @@ class TrackingTab:
                 }
 
     def _bb_pan_end(self, event) -> None:
-        if self.video_loaded and self.select_roi.value == "Rectangle":
+        if not self.video_loaded:
+            return
+
+        # If we were dragging a ROI, finalize the drag
+        if self.dragging_roi is not None:
+            # ROI already updated in _bb_pan, just reset state
+            self.dragging_roi = None
+            self.dragging_roi_type = None
+            self.drag_start_pos = {"x": 0, "y": 0}
+            self.drag_roi_original_pos = {}
+            return
+
+        # Not dragging - proceed with normal ROI creation
+        if self.select_roi.value == "Rectangle":
             # Remove temporary bounding box
             if self.bounding_box in self.frame_pane.renderers:
                 self.frame_pane.renderers.remove(self.bounding_box)
@@ -448,7 +937,7 @@ class TrackingTab:
             self.button_start_tracking.disabled = False
             self.button_save_roi_json.disabled = False
 
-        elif self.video_loaded and self.select_roi.value == "Circle":
+        elif self.select_roi.value == "Circle":
             # Remove temporary circle
             if self.circle_temp_annotation in self.frame_pane.renderers:
                 self.frame_pane.renderers.remove(self.circle_temp_annotation)
@@ -527,8 +1016,6 @@ class TrackingTab:
             print(
                 f"video_loaded: {self.video_loaded}, button disabled: {self.button_start_tracking.disabled}"
             )
-        
-        self._rois_to_json()
 
     def _poly_annotation(self, event) -> None:
         if self.select_roi.value == "Polygon":
@@ -578,10 +1065,9 @@ class TrackingTab:
 
                 # send the points and reset poly_annotations
                 self.rois.append(polygon)
-        
+
                 self.poly_annotation_points_x, self.poly_annotation_points_y = [], []
                 self.button_save_roi_json.disabled = False
-                self._rois_to_json()
                 
             else:
                 dot = self.frame_pane.scatter(
@@ -1272,40 +1758,6 @@ class TrackingTab:
     def _hide_warning(self) -> None:
         self.warning.visible = False
 
-    def _rois_to_json(self) -> None:
-        # ROI export functionality removed - ROIs are now included in the main tracking data export
-        import json
-        from datetime import datetime
-
-        try:
-            # Validate required data
-            if not len(self.rois):
-                self._add_log_message("❌ No ROI loaded for download", "error")
-                return
-
-            json_string = json.dumps(convert_rois_to_dict(self.rois), indent=2)
-
-            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-
-            filename = f"rois_data_{timestamp}.json"
-            data_bytes = json_string.encode("utf-8")
-
-            # Create BytesIO object from the data
-            file_obj = BytesIO(data_bytes)
-            file_obj.seek(0)  # Ensure we're at the start of the data
-            
-            # Configure FileDownload widget
-            self.button_save_roi_json.file = file_obj
-            self.button_save_roi_json.filename = filename
-            self.button_save_roi_json.mime_type = "application/json"
-            
-        except Exception as e:
-            self._add_log_message(f"❌ Error preparing download: {str(e)}", "error")
-            print(f"Error configuring download: {e}")
-            import traceback
-
-            traceback.print_exc()    
-        
     def _configure_download(self) -> None:
         """Configure the download button with tracking data"""
         try:
@@ -1408,7 +1860,15 @@ class TrackingTab:
                             pn.Spacer(width=15),
                             self.button_save_roi_json,
                         ),
-                        width=200,
+                        # Preset name input (shown when Save ROI is clicked)
+                        pn.Row(
+                            self.preset_name_input,
+                            pn.Spacer(width=5),
+                            self.button_confirm_save_preset,
+                            pn.Spacer(width=5),
+                            self.button_cancel_save_preset,
+                        ),
+                        width=450,
                     ),
                 ),
                 pn.Spacer(height=15),

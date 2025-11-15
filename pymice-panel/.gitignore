@@ -36,3 +36,17 @@ experiments/
 
 # Local configuration
 .env
+
+# React/Node
+pymice-react/frontend/node_modules/
+pymice-react/frontend/dist/
+pymice-react/frontend/.next/
+pymice-react/frontend/build/
+
+# Backend temp files
+pymice-react/backend/temp/
+pymice-react/logs/
+
+# Lock files (opcional - comente se quiser versionar)
+# pymice-react/frontend/package-lock.json
+# pymice-react/frontend/yarn.lock

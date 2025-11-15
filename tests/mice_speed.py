@@ -80,10 +80,9 @@ def calculate_speed(frame: np.ndarray, num_frames: int):
                 
             if len(dist_man) > 1:
                 cv.putText(frame, str(dist_man[-1]), (10, 180), cv.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 2)
-                cv.putText(frame, str(dist_man[-2]), (10, 240), cv.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 2)
-                
-            cv.putText(frame, str(num_frames), (10,50), cv.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (0, 0, 255), 2)    
-            cv.imshow('Window', frame)
+                cv.putText(frame, str(dist_man[-2]), (10, 240), cv.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (255, 255, 0), 2)    
+    
+           
     return centroid 
 #############################################################################################################################################################
 frame, _ = cap.read()
@@ -100,6 +99,7 @@ while True:
         x, y = calculate_speed(frame, num_frames)
         
     cv.circle(frame, (x,y), 2, (0, 0, 255), 1)
+    cv.putText(frame, str(num_frames), (10,50), cv.FONT_HERSHEY_COMPLEX_SMALL, 1.5, (0, 0, 255), 2)
     cv.imshow('Mice image', frame)
     
     if cv.waitKey(1) & 0xff == 27:
@@ -134,12 +134,12 @@ fig, axis = plt.subplots(2,3, figsize=(8,4))
 
 eixo_x = [c[0] for c in centers]
 axis[0][0].bar(list(range(len(centers))), eixo_x, color='blue')
-axis[0][0].set_xlabel('Quantidade de frames (em multiplos de 15)')
+axis[0][0].set_xlabel(f'Quantidade de frames (em multiplos de {FRAMES_SAMPLE})')
 axis[0][0].set_ylabel('X - Centro')
 
 eixo_y = [c[1] for c in centers]
 axis[0][1].bar(list(range(len(centers))), eixo_y, color='red')
-axis[0][1].set_xlabel('Quantidade de frames (em multiplos de 15)')
+axis[0][1].set_xlabel(f'Quantidade de frames (em multiplos de {FRAMES_SAMPLE})')
 axis[0][1].set_ylabel('Y - Centro')
 
 # # axis[0][2].bar(list(range(len(picos_80))), picos_80, color='pink')

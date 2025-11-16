@@ -43,7 +43,8 @@ export default function TrackingTab() {
   const [videoFiles, setVideoFiles] = useState<VideoItem[]>([])
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(-1)
   const [batchResults, setBatchResults] = useState<any[]>([])
-  const [stopBatchRequested, setStopBatchRequested] = useState(false)
+  const stopBatchRequestedRef = useRef<boolean>(false)
+  const currentTaskIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     loadModels()
@@ -270,10 +271,20 @@ export default function TrackingTab() {
     return new Promise((resolve, reject) => {
       const interval = setInterval(async () => {
         try {
+          // Check if stop was requested
+          if (stopBatchRequestedRef.current) {
+            clearInterval(interval)
+            reject(new Error('Stopped by user'))
+            return
+          }
+
           const progressResponse = await trackingApi.getProgress(taskId)
           if (progressResponse.data.success && progressResponse.data.data) {
             const progressData = progressResponse.data.data
             updateVideoField(videoIndex, 'progress', progressData.percentage || 0)
+
+            // Update tracking frame URL for live preview (same as single video mode)
+            setTrackingFrameUrl(`/api/tracking/frame/${taskId}?t=${Date.now()}`)
 
             if (progressData.status === 'completed') {
               clearInterval(interval)
@@ -283,7 +294,7 @@ export default function TrackingTab() {
               const resultData = JSON.parse(await resultResponse.data.text())
 
               resolve(resultData)
-            } else if (progressData.status === 'error') {
+            } else if (progressData.status === 'error' || progressData.status === 'stopped') {
               clearInterval(interval)
               reject(new Error(progressData.error || 'Tracking failed'))
             }
@@ -296,9 +307,20 @@ export default function TrackingTab() {
     })
   }
 
-  const handleStopBatch = () => {
-    setStopBatchRequested(true)
-    addLog('Stopping batch processing...')
+  const handleStopBatch = async () => {
+    stopBatchRequestedRef.current = true
+    setTrackingFrameUrl('')
+    addLog('🛑 Stopping batch processing...')
+
+    // Stop current tracking task in backend if exists
+    if (currentTaskIdRef.current) {
+      try {
+        await trackingApi.stopTracking(currentTaskIdRef.current)
+        addLog('✓ Backend tracking stopped')
+      } catch (error) {
+        console.error('Failed to stop tracking:', error)
+      }
+    }
   }
 
   const handleBatchTracking = async () => {
@@ -314,15 +336,16 @@ export default function TrackingTab() {
     }
 
     setIsTracking(true)
-    setStopBatchRequested(false)
+    stopBatchRequestedRef.current = false
+    currentTaskIdRef.current = null
     const results = []
 
     addLog(`Starting batch tracking for ${videoFiles.length} video(s)`)
 
     for (let i = 0; i < videoFiles.length; i++) {
       // Verificar se stop foi solicitado
-      if (stopBatchRequested) {
-        addLog('Batch processing stopped by user')
+      if (stopBatchRequestedRef.current) {
+        addLog('🛑 Batch processing stopped by user')
         break
       }
 
@@ -365,11 +388,18 @@ export default function TrackingTab() {
         }
 
         const taskId = trackingResponse.data.data.task_id
+        currentTaskIdRef.current = taskId  // Store current task ID for stop functionality
         updateVideoField(i, 'taskId', taskId)
         addLog(`[Video ${i + 1}/${videoFiles.length}] Tracking in progress...`)
 
         // 3. Poll for completion
         const result = await pollTrackingCompletion(taskId, i)
+
+        // Check if stopped during polling
+        if (stopBatchRequestedRef.current) {
+          addLog('🛑 Batch processing stopped during tracking')
+          break
+        }
 
         // 4. Store result
         const enrichedResult = {
@@ -386,6 +416,14 @@ export default function TrackingTab() {
 
       } catch (error) {
         const errorMessage = (error as Error).message
+
+        // If stopped by user, don't mark as error
+        if (errorMessage === 'Stopped by user') {
+          updateVideoStatus(i, 'error', undefined, 'Stopped by user', 0)
+          addLog(`[Video ${i + 1}/${videoFiles.length}] 🛑 Stopped`)
+          break  // Stop processing more videos
+        }
+
         updateVideoStatus(i, 'error', undefined, errorMessage, 0)
         addLog(`[Video ${i + 1}/${videoFiles.length}] ✗ Error: ${errorMessage}`)
 
@@ -397,11 +435,12 @@ export default function TrackingTab() {
     setBatchResults(results)
     setIsTracking(false)
     setCurrentVideoIndex(-1)
-    setStopBatchRequested(false)
+    stopBatchRequestedRef.current = false
+    currentTaskIdRef.current = null
 
     const successCount = results.length
     const failedCount = videoFiles.length - successCount
-    addLog(`Batch tracking completed: ${successCount} succeeded, ${failedCount} failed`)
+    addLog(`✓ Batch tracking completed: ${successCount} succeeded, ${failedCount} failed`)
   }
 
   const downloadBatchResults = () => {
@@ -452,7 +491,7 @@ export default function TrackingTab() {
       }))
 
       setVideoFiles(videoItems)
-      setVideoFile(null)
+      setVideoFile(filesArray[0]) // Show first video for ROI drawing
       setBatchResults([])
       setUploadedFilename('')
       setTaskId(null)

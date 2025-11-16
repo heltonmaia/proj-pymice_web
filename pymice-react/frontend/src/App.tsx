@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Camera, Target, BarChart3, Wrench, Beaker, Globe } from 'lucide-react'
+import MouseIcon from './components/MouseIcon'
 import CameraTab from './pages/CameraTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
@@ -28,10 +29,10 @@ function App() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Target className="w-8 h-8 text-primary-500" />
+              <MouseIcon className="w-10 h-10 text-primary-500" />
               <div>
                 <h1 className="text-2xl font-bold text-white">PyMiceTracking</h1>
-                <p className="text-sm text-gray-400">Web Application for Mouse Behavioral Analysis</p>
+                <p className="text-sm text-gray-400">Web Application for Mice Behavioral Analysis</p>
               </div>
             </div>
             <div className="text-sm text-gray-400">

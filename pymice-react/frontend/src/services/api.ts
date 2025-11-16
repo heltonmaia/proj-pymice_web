@@ -97,6 +97,30 @@ export const trackingApi = {
 
   downloadResults: (taskId: string) =>
     api.get(`/tracking/results/${taskId}`, { responseType: 'blob' }),
+
+  // ROI Templates
+  saveROITemplate: (preset: ROIPreset) =>
+    api.post<ApiResponse<{ message: string; template_name: string; filename: string }>>(
+      '/tracking/roi-templates/save',
+      preset
+    ),
+
+  listROITemplates: () =>
+    api.get<ApiResponse<{
+      templates: Array<{
+        filename: string
+        preset_name: string
+        description: string
+        timestamp: string
+        roi_count: number
+      }>
+    }>>('/tracking/roi-templates/list'),
+
+  loadROITemplate: (filename: string) =>
+    api.get<ApiResponse<ROIPreset>>(`/tracking/roi-templates/load/${filename}`),
+
+  deleteROITemplate: (filename: string) =>
+    api.delete<ApiResponse<{ message: string }>>(`/tracking/roi-templates/delete/${filename}`),
 }
 
 // ROI Preset API

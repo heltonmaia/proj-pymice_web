@@ -1,24 +1,160 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Play, Pause, Square, Download, Settings } from 'lucide-react'
+import { Upload, Play, Square, Download, Settings } from 'lucide-react'
 import type { ROI, ROIPreset, ROIType } from '@/types'
 import { drawROI } from '@/utils/canvas'
+import { videoApi, trackingApi } from '@/services/api'
 
 export default function TrackingTab() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [uploadedFilename, setUploadedFilename] = useState<string>('')
   const [modelFile, setModelFile] = useState<string>('')
+  const [availableModels, setAvailableModels] = useState<string[]>([])
   const [rois, setRois] = useState<ROI[]>([])
   const [currentROIType, setCurrentROIType] = useState<ROIType>('Rectangle')
   const [isTracking, setIsTracking] = useState(false)
-  const [isPaused, setIsPaused] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.5)
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.25)
   const [iouThreshold, setIouThreshold] = useState(0.45)
+  const [taskId, setTaskId] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [trackingFrameUrl, setTrackingFrameUrl] = useState<string>('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const trackingIntervalRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null)
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([])
   const [currentMousePos, setCurrentMousePos] = useState<{ x: number; y: number } | null>(null)
+  const [trackingLogs, setTrackingLogs] = useState<Array<{ time: string; message: string }>>([])
+  const logsEndRef = useRef<HTMLDivElement>(null)
+  const [roiTemplates, setRoiTemplates] = useState<Array<{
+    filename: string
+    preset_name: string
+    description: string
+    timestamp: string
+    roi_count: number
+  }>>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
+
+  useEffect(() => {
+    loadModels()
+    loadTemplates()
+  }, [])
+
+  useEffect(() => {
+    // Auto-scroll to latest log
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [trackingLogs])
+
+  const addLog = (message: string) => {
+    const time = new Date().toLocaleTimeString()
+    setTrackingLogs(prev => [...prev, { time, message }])
+  }
+
+  const loadModels = async () => {
+    try {
+      const response = await trackingApi.listModels()
+      if (response.data.success && response.data.data) {
+        const models = response.data.data.models || []
+        setAvailableModels(models)
+        if (models.length > 0) {
+          setModelFile(models[0])
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load models:', error)
+    }
+  }
+
+  const loadTemplates = async () => {
+    try {
+      const response = await trackingApi.listROITemplates()
+      if (response.data.success && response.data.data) {
+        setRoiTemplates(response.data.data.templates || [])
+      }
+    } catch (error) {
+      console.error('Failed to load templates:', error)
+    }
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim() || rois.length === 0) {
+      addLog('✗ Please enter a template name and draw at least one ROI')
+      return
+    }
+
+    try {
+      const video = videoRef.current
+      const frameWidth = video?.videoWidth || 640
+      const frameHeight = video?.videoHeight || 480
+
+      // Prepare ROIs with center coordinates
+      const preparedRois = rois.map(roi => {
+        if (roi.roi_type === 'Polygon') {
+          const vertices = roi.vertices || []
+          const sumX = vertices.reduce((sum, v) => sum + v[0], 0)
+          const sumY = vertices.reduce((sum, v) => sum + v[1], 0)
+          return {
+            ...roi,
+            center_x: sumX / vertices.length,
+            center_y: sumY / vertices.length,
+          }
+        }
+        return roi
+      })
+
+      await trackingApi.saveROITemplate({
+        preset_name: templateName,
+        description: templateDescription,
+        timestamp: new Date().toISOString(),
+        frame_width: frameWidth,
+        frame_height: frameHeight,
+        rois: preparedRois,
+      })
+
+      addLog(`✓ Template "${templateName}" saved successfully`)
+      setShowSaveTemplateModal(false)
+      setTemplateName('')
+      setTemplateDescription('')
+      loadTemplates()
+    } catch (error) {
+      console.error('Failed to save template:', error)
+      addLog('✗ Failed to save template: ' + (error as Error).message)
+    }
+  }
+
+  const handleLoadTemplate = async () => {
+    if (!selectedTemplate) return
+
+    try {
+      const response = await trackingApi.loadROITemplate(selectedTemplate)
+      if (response.data.success && response.data.data) {
+        setRois(response.data.data.rois || [])
+        drawFrame()
+        addLog(`✓ Template "${response.data.data.preset_name}" loaded successfully`)
+      }
+    } catch (error) {
+      console.error('Failed to load template:', error)
+      addLog('✗ Failed to load template: ' + (error as Error).message)
+    }
+  }
+
+  const handleDeleteTemplate = async (filename: string) => {
+    if (!confirm('Are you sure you want to delete this template?')) return
+
+    try {
+      await trackingApi.deleteROITemplate(filename)
+      addLog('✓ Template deleted successfully')
+      setSelectedTemplate('')
+      loadTemplates()
+    } catch (error) {
+      console.error('Failed to delete template:', error)
+      addLog('✗ Failed to delete template: ' + (error as Error).message)
+    }
+  }
 
   useEffect(() => {
     if (videoFile && videoRef.current) {
@@ -263,29 +399,146 @@ export default function TrackingTab() {
     setDrawStart(null)
   }
 
-  const handleStartTracking = () => {
-    setIsTracking(true)
-    setIsPaused(false)
-    // Simulate progress
-    let p = 0
-    const interval = setInterval(() => {
-      p += 1
-      setProgress(p)
-      if (p >= 100) {
-        clearInterval(interval)
-        setIsTracking(false)
+  const handleStartTracking = async () => {
+    if (!videoFile || !modelFile) return
+
+    try {
+      setIsUploading(true)
+
+      // Upload video if not already uploaded
+      let filename = uploadedFilename
+      if (!filename) {
+        const uploadResponse = await videoApi.upload(videoFile)
+        if (uploadResponse.data.success && uploadResponse.data.data) {
+          filename = uploadResponse.data.data.filename
+          setUploadedFilename(filename)
+        } else {
+          throw new Error('Failed to upload video')
+        }
       }
-    }, 100)
+
+      setIsUploading(false)
+      setIsTracking(true)
+      setProgress(0)
+
+      // Get video dimensions from the video element
+      const video = videoRef.current
+      const frameWidth = video?.videoWidth || 640
+      const frameHeight = video?.videoHeight || 480
+
+      // Prepare ROIs with required fields
+      const preparedRois = rois.map(roi => {
+        if (roi.roi_type === 'Polygon') {
+          // Calculate center for polygon
+          const vertices = roi.vertices || []
+          const sumX = vertices.reduce((sum, v) => sum + v[0], 0)
+          const sumY = vertices.reduce((sum, v) => sum + v[1], 0)
+          const centerX = sumX / vertices.length
+          const centerY = sumY / vertices.length
+          return {
+            ...roi,
+            center_x: centerX,
+            center_y: centerY,
+          }
+        }
+        return roi
+      })
+
+      // Start tracking
+      const trackingResponse = await trackingApi.startTracking({
+        video_filename: filename,
+        model_name: modelFile,
+        rois: {
+          preset_name: 'custom',
+          description: 'Custom ROI configuration',
+          timestamp: new Date().toISOString(),
+          frame_width: frameWidth,
+          frame_height: frameHeight,
+          rois: preparedRois,
+        },
+        confidence_threshold: confidenceThreshold,
+        iou_threshold: iouThreshold,
+      })
+
+      if (trackingResponse.data.success && trackingResponse.data.data) {
+        const newTaskId = trackingResponse.data.data.task_id
+        setTaskId(newTaskId)
+        addLog('Tracking started successfully')
+
+        // Poll for progress and frames
+        const interval = setInterval(async () => {
+          try {
+            const progressResponse = await trackingApi.getProgress(newTaskId)
+            if (progressResponse.data.success && progressResponse.data.data) {
+              const progressData = progressResponse.data.data
+              setProgress(progressData.percentage || 0)
+
+              // Update tracking frame URL for live preview
+              setTrackingFrameUrl(`/api/tracking/frame/${newTaskId}?t=${Date.now()}`)
+
+              if (progressData.status === 'completed') {
+                clearInterval(interval)
+                setIsTracking(false)
+                // Keep the last frame visible - don't clear trackingFrameUrl
+                addLog('✓ Tracking completed! You can now download the results.')
+              } else if (progressData.status === 'error') {
+                clearInterval(interval)
+                setIsTracking(false)
+                setTrackingFrameUrl('')
+                addLog('✗ Tracking failed: ' + progressData.error)
+              }
+            }
+          } catch (error) {
+            console.error('Failed to get progress:', error)
+          }
+        }, 500) // Poll every 500ms for smoother updates
+
+        trackingIntervalRef.current = interval
+      }
+    } catch (error) {
+      console.error('Failed to start tracking:', error)
+      addLog('✗ Failed to start tracking: ' + (error as Error).message)
+      setIsTracking(false)
+      setIsUploading(false)
+    }
   }
 
-  const handlePauseTracking = () => {
-    setIsPaused(!isPaused)
-  }
-
-  const handleStopTracking = () => {
+  const handleStopTracking = async () => {
+    if (taskId) {
+      try {
+        await trackingApi.stopTracking(taskId)
+        addLog('Tracking stopped by user')
+      } catch (error) {
+        console.error('Failed to stop tracking:', error)
+      }
+    }
+    if (trackingIntervalRef.current) {
+      clearInterval(trackingIntervalRef.current)
+      trackingIntervalRef.current = null
+    }
     setIsTracking(false)
-    setIsPaused(false)
     setProgress(0)
+    setTrackingFrameUrl('')
+  }
+
+  const handleDownloadResults = async () => {
+    if (!taskId) return
+
+    try {
+      const response = await trackingApi.downloadResults(taskId)
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `tracking_results_${taskId}.json`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      addLog('✓ Results downloaded successfully')
+    } catch (error) {
+      console.error('Failed to download results:', error)
+      addLog('✗ Failed to download results: ' + (error as Error).message)
+    }
   }
 
   return (
@@ -309,18 +562,26 @@ export default function TrackingTab() {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              YOLO Model
+              YOLO Model {availableModels.length === 0 && <span className="text-red-400">(No models found)</span>}
             </label>
             <select
               value={modelFile}
               onChange={(e) => setModelFile(e.target.value)}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              disabled={availableModels.length === 0}
             >
               <option value="">Select model...</option>
-              <option value="yolov11n.pt">YOLOv11n (nano)</option>
-              <option value="yolov11s.pt">YOLOv11s (small)</option>
-              <option value="yolov11m.pt">YOLOv11m (medium)</option>
+              {availableModels.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
             </select>
+            {availableModels.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">
+                Place .pt model files in backend/temp/models/ directory
+              </p>
+            )}
           </div>
 
           <div>
@@ -336,6 +597,55 @@ export default function TrackingTab() {
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
             </select>
+          </div>
+        </div>
+
+        {/* ROI Templates Section */}
+        <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">ROI Templates</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Load Template
+              </label>
+              <select
+                value={selectedTemplate}
+                onChange={(e) => setSelectedTemplate(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              >
+                <option value="">Select a template...</option>
+                {roiTemplates.map((template) => (
+                  <option key={template.filename} value={template.filename}>
+                    {template.preset_name} ({template.roi_count} ROIs)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 items-end">
+              <button
+                onClick={handleLoadTemplate}
+                disabled={!selectedTemplate}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
+              >
+                Load
+              </button>
+              <button
+                onClick={() => selectedTemplate && handleDeleteTemplate(selectedTemplate)}
+                disabled={!selectedTemplate}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={() => setShowSaveTemplateModal(true)}
+              disabled={rois.length === 0}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
+            >
+              Save Current ROIs as Template
+            </button>
           </div>
         </div>
 
@@ -374,23 +684,15 @@ export default function TrackingTab() {
         <div className="flex gap-4 items-center">
           <button
             onClick={handleStartTracking}
-            disabled={!videoFile || !modelFile || isTracking}
+            disabled={!videoFile || !modelFile || isTracking || isUploading}
             className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <Play className="w-5 h-5" />
-            Start Tracking
+            {isUploading ? 'Uploading...' : 'Start Tracking'}
           </button>
 
           {isTracking && (
             <>
-              <button
-                onClick={handlePauseTracking}
-                className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <Pause className="w-5 h-5" />
-                {isPaused ? 'Resume' : 'Pause'}
-              </button>
-
               <button
                 onClick={handleStopTracking}
                 className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
@@ -406,12 +708,16 @@ export default function TrackingTab() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <div className="text-sm text-gray-400 mt-1">{progress}% completed</div>
+                <div className="text-sm text-gray-400 mt-1">{progress.toFixed(1)}% completed</div>
               </div>
             </>
           )}
 
-          <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2">
+          <button
+            onClick={handleDownloadResults}
+            disabled={!taskId || isTracking}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
             <Download className="w-5 h-5" />
             Download Results
           </button>
@@ -420,44 +726,152 @@ export default function TrackingTab() {
 
       {/* Video Canvas */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h3 className="text-lg font-semibold mb-4">Video Preview & ROI Drawing</h3>
+        <h3 className="text-lg font-semibold mb-4">
+          {isTracking ? 'Live Tracking Preview' : trackingFrameUrl ? 'Tracking Result' : 'Video Preview & ROI Drawing'}
+        </h3>
         <div className="bg-black rounded-lg overflow-hidden border border-gray-700 relative flex items-center justify-center" style={{ minHeight: '400px' }}>
           <video ref={videoRef} className="hidden" />
-          <canvas
-            ref={canvasRef}
-            className="max-w-full cursor-crosshair"
-            onMouseDown={handleCanvasMouseDown}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={() => setIsDrawing(false)}
-          />
-          <div className="absolute top-4 right-4 bg-black/70 px-3 py-2 rounded-lg text-sm">
-            {currentROIType === 'Polygon' ? (
-              polygonPoints.length === 0 ? (
-                'Click to add polygon points'
-              ) : polygonPoints.length < 3 ? (
-                `Click to add more points (${polygonPoints.length} points)`
+
+          {/* Show tracking frame when tracking is active or when last frame is available */}
+          {trackingFrameUrl && (
+            <img
+              src={trackingFrameUrl}
+              alt="Tracking preview"
+              className="max-w-full max-h-[600px] w-auto h-auto"
+              style={{ objectFit: 'contain' }}
+            />
+          )}
+
+          {/* Show canvas for ROI drawing when not tracking and no tracking frame */}
+          {!isTracking && !trackingFrameUrl && (
+            <canvas
+              ref={canvasRef}
+              className="max-w-full cursor-crosshair"
+              onMouseDown={handleCanvasMouseDown}
+              onMouseMove={handleCanvasMouseMove}
+              onMouseUp={handleCanvasMouseUp}
+              onMouseLeave={() => setIsDrawing(false)}
+            />
+          )}
+
+          {!isTracking && !trackingFrameUrl && (
+            <div className="absolute top-4 right-4 bg-black/70 px-3 py-2 rounded-lg text-sm">
+              {currentROIType === 'Polygon' ? (
+                polygonPoints.length === 0 ? (
+                  'Click to add polygon points'
+                ) : polygonPoints.length < 3 ? (
+                  `Click to add more points (${polygonPoints.length} points)`
+                ) : (
+                  'Click green point to close, or ESC to cancel'
+                )
               ) : (
-                'Click green point to close, or ESC to cancel'
-              )
-            ) : (
-              `Click and drag to draw ${currentROIType}`
-            )}
-          </div>
+                `Click and drag to draw ${currentROIType}`
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex gap-2">
-          <button
-            onClick={() => setRois([])}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
-          >
-            Clear All ROIs
-          </button>
-          <div className="text-sm text-gray-400 flex items-center">
-            Total ROIs: {rois.length}
-          </div>
+          {trackingFrameUrl && !isTracking && (
+            <button
+              onClick={() => {
+                setTrackingFrameUrl('')
+                setTaskId(null)
+                setProgress(0)
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+            >
+              New Tracking
+            </button>
+          )}
+          {!trackingFrameUrl && (
+            <>
+              <button
+                onClick={() => setRois([])}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
+              >
+                Clear All ROIs
+              </button>
+              <div className="text-sm text-gray-400 flex items-center">
+                Total ROIs: {rois.length}
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Tracking Logs */}
+      {trackingLogs.length > 0 && (
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4">Tracking Log</h3>
+          <div className="bg-black rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto font-mono text-sm">
+            {trackingLogs.map((log, index) => (
+              <div key={index} className="text-gray-300 mb-1">
+                <span className="text-gray-500">[{log.time}]</span> {log.message}
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
+        </div>
+      )}
+
+      {/* Save Template Modal */}
+      {showSaveTemplateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-700">
+            <h3 className="text-xl font-semibold mb-4">Save ROI Template</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="e.g., Open Field Test, Y-Maze, etc."
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  placeholder="Brief description of the experiment setup..."
+                  rows={3}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+              <div className="text-sm text-gray-400">
+                {rois.length} ROI(s) will be saved
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowSaveTemplateModal(false)
+                    setTemplateName('')
+                    setTemplateDescription('')
+                  }}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={!templateName.trim()}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg"
+                >
+                  Save Template
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

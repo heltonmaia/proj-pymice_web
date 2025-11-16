@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Play, Square, Download, Settings } from 'lucide-react'
-import type { ROI, ROIPreset, ROIType } from '@/types'
+import { Play, Square, Download, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react'
+import type { ROI, ROIType, VideoItem } from '@/types'
 import { drawROI } from '@/utils/canvas'
 import { videoApi, trackingApi } from '@/services/api'
 
@@ -24,7 +24,7 @@ export default function TrackingTab() {
   const [isDrawing, setIsDrawing] = useState(false)
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null)
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([])
-  const [currentMousePos, setCurrentMousePos] = useState<{ x: number; y: number } | null>(null)
+  const [, setCurrentMousePos] = useState<{ x: number; y: number } | null>(null)
   const [trackingLogs, setTrackingLogs] = useState<Array<{ time: string; message: string }>>([])
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [roiTemplates, setRoiTemplates] = useState<Array<{
@@ -38,6 +38,12 @@ export default function TrackingTab() {
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
+
+  // Batch processing states
+  const [videoFiles, setVideoFiles] = useState<VideoItem[]>([])
+  const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(-1)
+  const [batchResults, setBatchResults] = useState<any[]>([])
+  const [stopBatchRequested, setStopBatchRequested] = useState(false)
 
   useEffect(() => {
     loadModels()
@@ -58,7 +64,8 @@ export default function TrackingTab() {
     try {
       const response = await trackingApi.listModels()
       if (response.data.success && response.data.data) {
-        const models = response.data.data.models || []
+        const data: any = response.data.data
+        const models = Array.isArray(data) ? data : data.models || []
         setAvailableModels(models)
         if (models.length > 0) {
           setModelFile(models[0])
@@ -132,9 +139,62 @@ export default function TrackingTab() {
     try {
       const response = await trackingApi.loadROITemplate(selectedTemplate)
       if (response.data.success && response.data.data) {
-        setRois(response.data.data.rois || [])
-        drawFrame()
-        addLog(`✓ Template "${response.data.data.preset_name}" loaded successfully`)
+        const templateData = response.data.data
+        setRois(templateData.rois || [])
+
+        // Redesenhar ROIs no canvas
+        if (canvasRef.current) {
+          const canvas = canvasRef.current
+          const ctx = canvas.getContext('2d')
+          if (ctx && videoRef.current) {
+            const video = videoRef.current
+
+            // Se vídeo não está carregado, esperar ele carregar para desenhar ROIs
+            if (video.readyState < 2) {
+              const drawOnLoad = () => {
+                setTimeout(() => {
+                  if (canvasRef.current && videoRef.current) {
+                    const canvas = canvasRef.current
+                    const ctx = canvas.getContext('2d')
+                    if (ctx) {
+                      // Limpar canvas
+                      ctx.clearRect(0, 0, canvas.width, canvas.height)
+                      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+
+                      // Desenhar todas as ROIs
+                      const colors = ['#00ff00', '#ff00ff', '#00ffff', '#ffff00', '#ff8800']
+                      templateData.rois.forEach((roi: ROI, index: number) => {
+                        drawROI(ctx, roi, colors[index % colors.length], 2, true, 0.1)
+                      })
+                    }
+                  }
+                }, 100)
+              }
+              video.addEventListener('loadeddata', drawOnLoad, { once: true })
+            } else {
+              // Vídeo já está carregado, desenhar imediatamente
+              setTimeout(() => {
+                if (canvasRef.current && videoRef.current) {
+                  const canvas = canvasRef.current
+                  const ctx = canvas.getContext('2d')
+                  if (ctx) {
+                    // Limpar canvas
+                    ctx.clearRect(0, 0, canvas.width, canvas.height)
+                    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
+
+                    // Desenhar todas as ROIs
+                    const colors = ['#00ff00', '#ff00ff', '#00ffff', '#ffff00', '#ff8800']
+                    templateData.rois.forEach((roi: ROI, index: number) => {
+                      drawROI(ctx, roi, colors[index % colors.length], 2, true, 0.1)
+                    })
+                  }
+                }
+              }, 100)
+            }
+          }
+        }
+
+        addLog(`✓ Loaded template: ${templateData.preset_name} with ${templateData.rois.length} ROIs`)
       }
     } catch (error) {
       console.error('Failed to load template:', error)
@@ -153,6 +213,252 @@ export default function TrackingTab() {
     } catch (error) {
       console.error('Failed to delete template:', error)
       addLog('✗ Failed to delete template: ' + (error as Error).message)
+    }
+  }
+
+  // Batch processing helper functions
+  const updateVideoStatus = (index: number, status: VideoItem['status'], result?: any, error?: string, progress?: number) => {
+    setVideoFiles(prev => prev.map((v, i) =>
+      i === index ? {
+        ...v,
+        status,
+        result: result !== undefined ? result : v.result,
+        error: error !== undefined ? error : v.error,
+        progress: progress !== undefined ? progress : v.progress
+      } : v
+    ))
+  }
+
+  const updateVideoField = (index: number, field: keyof VideoItem, value: any) => {
+    setVideoFiles(prev => prev.map((v, i) =>
+      i === index ? { ...v, [field]: value } : v
+    ))
+  }
+
+  const prepareROIs = () => {
+    const video = videoRef.current
+    const frameWidth = video?.videoWidth || 640
+    const frameHeight = video?.videoHeight || 480
+
+    const preparedRois = rois.map(roi => {
+      if (roi.roi_type === 'Polygon') {
+        const vertices = roi.vertices || []
+        const sumX = vertices.reduce((sum, v) => sum + v[0], 0)
+        const sumY = vertices.reduce((sum, v) => sum + v[1], 0)
+        const centerX = sumX / vertices.length
+        const centerY = sumY / vertices.length
+        return {
+          ...roi,
+          center_x: centerX,
+          center_y: centerY,
+        }
+      }
+      return roi
+    })
+
+    return {
+      preset_name: 'custom',
+      description: 'Custom ROI configuration',
+      timestamp: new Date().toISOString(),
+      frame_width: frameWidth,
+      frame_height: frameHeight,
+      rois: preparedRois,
+    }
+  }
+
+  const pollTrackingCompletion = async (taskId: string, videoIndex: number): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const interval = setInterval(async () => {
+        try {
+          const progressResponse = await trackingApi.getProgress(taskId)
+          if (progressResponse.data.success && progressResponse.data.data) {
+            const progressData = progressResponse.data.data
+            updateVideoField(videoIndex, 'progress', progressData.percentage || 0)
+
+            if (progressData.status === 'completed') {
+              clearInterval(interval)
+
+              // Download the result
+              const resultResponse = await trackingApi.downloadResults(taskId)
+              const resultData = JSON.parse(await resultResponse.data.text())
+
+              resolve(resultData)
+            } else if (progressData.status === 'error') {
+              clearInterval(interval)
+              reject(new Error(progressData.error || 'Tracking failed'))
+            }
+          }
+        } catch (error) {
+          clearInterval(interval)
+          reject(error)
+        }
+      }, 1000)
+    })
+  }
+
+  const handleStopBatch = () => {
+    setStopBatchRequested(true)
+    addLog('Stopping batch processing...')
+  }
+
+  const handleBatchTracking = async () => {
+    if (videoFiles.length === 0 || !modelFile) {
+      addLog('✗ Please select videos and a model')
+      return
+    }
+
+    if (rois.length === 0) {
+      if (!confirm('No ROIs defined. Continue without ROIs?')) {
+        return
+      }
+    }
+
+    setIsTracking(true)
+    setStopBatchRequested(false)
+    const results = []
+
+    addLog(`Starting batch tracking for ${videoFiles.length} video(s)`)
+
+    for (let i = 0; i < videoFiles.length; i++) {
+      // Verificar se stop foi solicitado
+      if (stopBatchRequested) {
+        addLog('Batch processing stopped by user')
+        break
+      }
+
+      setCurrentVideoIndex(i)
+      const videoItem = videoFiles[i]
+
+      try {
+        addLog(`[Video ${i + 1}/${videoFiles.length}] Processing: ${videoItem.filename}`)
+
+        // 1. Upload video
+        updateVideoStatus(i, 'uploading')
+        addLog(`[Video ${i + 1}/${videoFiles.length}] Uploading...`)
+
+        const uploadResponse = await videoApi.upload(videoItem.file, (uploadProgress) => {
+          updateVideoField(i, 'progress', uploadProgress)
+        })
+
+        if (!uploadResponse.data.success || !uploadResponse.data.data) {
+          throw new Error('Failed to upload video')
+        }
+
+        const filename = uploadResponse.data.data.filename
+        updateVideoField(i, 'uploadedFilename', filename)
+        addLog(`[Video ${i + 1}/${videoFiles.length}] Upload completed`)
+
+        // 2. Start tracking
+        updateVideoStatus(i, 'tracking', undefined, undefined, 0)
+        addLog(`[Video ${i + 1}/${videoFiles.length}] Starting tracking...`)
+
+        const trackingResponse = await trackingApi.startTracking({
+          video_filename: filename,
+          model_name: modelFile,
+          rois: prepareROIs(),
+          confidence_threshold: confidenceThreshold,
+          iou_threshold: iouThreshold,
+        })
+
+        if (!trackingResponse.data.success || !trackingResponse.data.data) {
+          throw new Error('Failed to start tracking')
+        }
+
+        const taskId = trackingResponse.data.data.task_id
+        updateVideoField(i, 'taskId', taskId)
+        addLog(`[Video ${i + 1}/${videoFiles.length}] Tracking in progress...`)
+
+        // 3. Poll for completion
+        const result = await pollTrackingCompletion(taskId, i)
+
+        // 4. Store result
+        const enrichedResult = {
+          video_name: videoItem.file.name,
+          original_filename: videoItem.file.name,
+          uploaded_filename: filename,
+          task_id: taskId,
+          ...result
+        }
+
+        results.push(enrichedResult)
+        updateVideoStatus(i, 'completed', enrichedResult, undefined, 100)
+        addLog(`[Video ${i + 1}/${videoFiles.length}] ✓ Completed successfully`)
+
+      } catch (error) {
+        const errorMessage = (error as Error).message
+        updateVideoStatus(i, 'error', undefined, errorMessage, 0)
+        addLog(`[Video ${i + 1}/${videoFiles.length}] ✗ Error: ${errorMessage}`)
+
+        // Continue with next video
+        continue
+      }
+    }
+
+    setBatchResults(results)
+    setIsTracking(false)
+    setCurrentVideoIndex(-1)
+    setStopBatchRequested(false)
+
+    const successCount = results.length
+    const failedCount = videoFiles.length - successCount
+    addLog(`Batch tracking completed: ${successCount} succeeded, ${failedCount} failed`)
+  }
+
+  const downloadBatchResults = () => {
+    const combinedData = {
+      batch_info: {
+        total_videos: videoFiles.length,
+        successful_videos: batchResults.length,
+        failed_videos: videoFiles.length - batchResults.length,
+        timestamp: new Date().toISOString(),
+        configuration: {
+          model: modelFile,
+          confidence_threshold: confidenceThreshold,
+          iou_threshold: iouThreshold,
+          rois: rois
+        }
+      },
+      results: batchResults
+    }
+
+    const blob = new Blob([JSON.stringify(combinedData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `batch_tracking_${new Date().getTime()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    addLog('✓ Batch results downloaded successfully')
+  }
+
+  const handleVideoFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const filesArray = Array.from(files)
+
+    if (filesArray.length === 1) {
+      // Single file mode - use existing logic
+      setVideoFile(filesArray[0])
+      setVideoFiles([])
+      setBatchResults([])
+    } else {
+      // Batch mode
+      const videoItems: VideoItem[] = filesArray.map(file => ({
+        file,
+        filename: file.name,
+        status: 'pending',
+        progress: 0
+      }))
+
+      setVideoFiles(videoItems)
+      setVideoFile(null)
+      setBatchResults([])
+      setUploadedFilename('')
+      setTaskId(null)
+      setTrackingFrameUrl('')
+
+      addLog(`Added ${filesArray.length} videos for batch processing`)
     }
   }
 
@@ -255,10 +561,15 @@ export default function TrackingTab() {
           Math.pow(x - firstPoint.x, 2) + Math.pow(y - firstPoint.y, 2)
         )
         if (distance < 10) {
-          // Close polygon
+          // Close polygon - calculate center
+          const vertices = polygonPoints.map(p => [p.x, p.y] as [number, number])
+          const sumX = vertices.reduce((sum, v) => sum + v[0], 0)
+          const sumY = vertices.reduce((sum, v) => sum + v[1], 0)
           const newROI: ROI = {
             roi_type: 'Polygon',
-            vertices: polygonPoints.map(p => [p.x, p.y]),
+            vertices,
+            center_x: sumX / vertices.length,
+            center_y: sumY / vertices.length,
           }
           setRois([...rois, newROI])
           setPolygonPoints([])
@@ -550,14 +861,20 @@ export default function TrackingTab() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Video File
+              Video File(s) {videoFiles.length > 0 && `(${videoFiles.length} files selected)`}
             </label>
             <input
               type="file"
               accept="video/*"
-              onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+              multiple
+              onChange={handleVideoFilesChange}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
             />
+            {videoFiles.length > 1 && (
+              <p className="text-xs text-gray-400 mt-1">
+                Batch mode: Same ROIs and settings will be applied to all videos
+              </p>
+            )}
           </div>
 
           <div>
@@ -649,49 +966,148 @@ export default function TrackingTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Confidence Threshold: {confidenceThreshold.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              min="0.1"
-              max="0.9"
-              step="0.05"
-              value={confidenceThreshold}
-              onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-              className="w-full"
-            />
-          </div>
+        {/* Batch Video List */}
+        {videoFiles.length > 0 && (
+          <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">Batch Processing Queue</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {videoFiles.map((video, index) => (
+                <div
+                  key={index}
+                  className={`bg-gray-700 rounded-lg p-3 border ${
+                    currentVideoIndex === index
+                      ? 'border-primary-500'
+                      : 'border-gray-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Status Icon */}
+                    <div className="flex-shrink-0">
+                      {video.status === 'pending' && (
+                        <Clock className="w-5 h-5 text-gray-400" />
+                      )}
+                      {video.status === 'uploading' && (
+                        <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                      )}
+                      {video.status === 'tracking' && (
+                        <Loader2 className="w-5 h-5 text-primary-400 animate-spin" />
+                      )}
+                      {video.status === 'completed' && (
+                        <CheckCircle className="w-5 h-5 text-green-400" />
+                      )}
+                      {video.status === 'error' && (
+                        <XCircle className="w-5 h-5 text-red-400" />
+                      )}
+                    </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              IOU Threshold: {iouThreshold.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              min="0.1"
-              max="0.9"
-              step="0.05"
-              value={iouThreshold}
-              onChange={(e) => setIouThreshold(parseFloat(e.target.value))}
-              className="w-full"
-            />
+                    {/* Video Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-200 truncate">
+                          {video.filename}
+                        </span>
+                        <span className="text-xs text-gray-400 capitalize">
+                          {video.status}
+                        </span>
+                      </div>
+
+                      {/* Progress Bar */}
+                      {(video.status === 'uploading' || video.status === 'tracking') && (
+                        <div className="mt-2">
+                          <div className="bg-gray-600 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                video.status === 'uploading'
+                                  ? 'bg-blue-500'
+                                  : 'bg-primary-500'
+                              }`}
+                              style={{ width: `${video.progress}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {video.progress.toFixed(1)}%
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error Message */}
+                      {video.status === 'error' && video.error && (
+                        <div className="mt-1 text-xs text-red-400">
+                          {video.error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* YOLO Model Configuration */}
+        <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">YOLO Model Configuration</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Confidence Threshold: {confidenceThreshold.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="0.9"
+                step="0.05"
+                value={confidenceThreshold}
+                onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Minimum confidence score for YOLO detections
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                IOU Threshold: {iouThreshold.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="0.9"
+                step="0.05"
+                value={iouThreshold}
+                onChange={(e) => setIouThreshold(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Intersection over Union threshold for NMS
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="flex gap-4 items-center">
-          <button
-            onClick={handleStartTracking}
-            disabled={!videoFile || !modelFile || isTracking || isUploading}
-            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Play className="w-5 h-5" />
-            {isUploading ? 'Uploading...' : 'Start Tracking'}
-          </button>
+        <div className="flex gap-4 items-center flex-wrap">
+          {!isTracking && (
+            <button
+              onClick={videoFiles.length > 0 ? handleBatchTracking : handleStartTracking}
+              disabled={
+                (videoFiles.length === 0 && !videoFile) ||
+                !modelFile ||
+                isTracking ||
+                isUploading
+              }
+              className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Play className="w-5 h-5" />
+              {isUploading
+                ? 'Uploading...'
+                : videoFiles.length > 0
+                ? `Start Batch Tracking (${videoFiles.length} videos)`
+                : 'Start Tracking'}
+            </button>
+          )}
 
-          {isTracking && (
+          {isTracking && videoFiles.length === 0 && (
             <>
               <button
                 onClick={handleStopTracking}
@@ -713,14 +1129,65 @@ export default function TrackingTab() {
             </>
           )}
 
-          <button
-            onClick={handleDownloadResults}
-            disabled={!taskId || isTracking}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Download className="w-5 h-5" />
-            Download Results
-          </button>
+          {isTracking && videoFiles.length > 0 && (
+            <>
+              <button
+                onClick={handleStopBatch}
+                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Square className="w-5 h-5" />
+                Stop Batch Processing
+              </button>
+
+              <div className="flex-1">
+                <div className="text-sm text-gray-300 mb-2">
+                  Processing video {currentVideoIndex + 1} of {videoFiles.length}
+                </div>
+                <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-primary-500 h-full transition-all duration-300"
+                    style={{ width: `${((currentVideoIndex + 1) / videoFiles.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {videoFiles.length === 0 && (
+            <button
+              onClick={handleDownloadResults}
+              disabled={!taskId || isTracking}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Download Results
+            </button>
+          )}
+
+          {batchResults.length > 0 && (
+            <button
+              onClick={downloadBatchResults}
+              disabled={isTracking}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Download All Results (JSON)
+            </button>
+          )}
+
+          {videoFiles.length > 0 && (
+            <button
+              onClick={() => {
+                setVideoFiles([])
+                setBatchResults([])
+                setCurrentVideoIndex(-1)
+              }}
+              disabled={isTracking}
+              className="px-6 py-3 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors"
+            >
+              Clear Batch
+            </button>
+          )}
         </div>
       </div>
 

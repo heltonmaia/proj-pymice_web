@@ -147,7 +147,19 @@ export const analysisApi = {
     api.post<Blob>('/analysis/heatmap', params, { responseType: 'blob' }),
 
   analyzeMovement: (trackingData: TrackingData) =>
-    api.post<ApiResponse<any>>('/analysis/movement', trackingData),
+    api.post<Blob>('/analysis/movement', trackingData, { responseType: 'blob' }),
+
+  generateCompleteAnalysis: (params: {
+    tracking_data: TrackingData
+    settings: HeatmapSettings
+  }) =>
+    api.post<Blob>('/analysis/complete', params, { responseType: 'blob' }),
+
+  downloadCompleteAnalysis: (params: {
+    tracking_data: TrackingData
+    settings: HeatmapSettings
+  }) =>
+    api.post<Blob>('/analysis/download', params, { responseType: 'blob' }),
 
   analyzeOpenField: (params: {
     tracking_data: TrackingData

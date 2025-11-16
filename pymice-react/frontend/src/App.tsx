@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Camera, Target, BarChart3, Wrench, Beaker, Globe } from 'lucide-react'
 import MouseIcon from './components/MouseIcon'
+import AnimatedMouse from './components/AnimatedMouse'
 import CameraTab from './pages/CameraTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
@@ -25,11 +26,14 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+      <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50 relative">
+        {/* Animated Mouse */}
+        <AnimatedMouse trigger={activeTab} />
+
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <MouseIcon className="w-10 h-10 text-primary-500" />
+              <MouseIcon className="w-10 h-10 text-primary-500" style={{ transform: 'scaleX(-1)' }} />
               <div>
                 <h1 className="text-2xl font-bold text-white">PyMiceTracking</h1>
                 <p className="text-sm text-gray-400">Web Application for Mice Behavioral Analysis</p>

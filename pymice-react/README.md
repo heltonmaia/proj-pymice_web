@@ -1,285 +1,232 @@
 # PyMiceTracking Web Application
 
-Uma aplicação web moderna para rastreamento e análise comportamental de camundongos usando React + TypeScript e FastAPI.
+Aplicação web moderna para rastreamento e análise comportamental de camundongos usando React + TypeScript e FastAPI.
 
-## 📋 Visão Geral
-
-Esta é uma recriação completa da aplicação PyMiceTracking Panel original, agora com uma arquitetura moderna cliente-servidor:
-
-- **Frontend**: React + TypeScript + Vite + TailwindCSS
-- **Backend**: FastAPI + Python + OpenCV + YOLO
-
-## 🏗️ Estrutura do Projeto
-
-```
-app-web/
-├── frontend/               # Aplicação React
-│   ├── src/
-│   │   ├── components/    # Componentes reutilizáveis
-│   │   ├── pages/         # Páginas/Tabs principais
-│   │   ├── services/      # Cliente API
-│   │   ├── types/         # Tipos TypeScript
-│   │   ├── utils/         # Utilitários
-│   │   └── App.tsx        # Componente principal
-│   ├── package.json
-│   └── vite.config.ts
-│
-└── backend/               # API FastAPI
-    ├── app/
-    │   ├── routers/       # Endpoints da API
-    │   ├── models/        # Schemas Pydantic
-    │   ├── services/      # Lógica de negócio
-    │   └── main.py        # Entry point
-    ├── pyproject.toml
-    └── requirements.txt
-```
-
-## 🚀 Funcionalidades
-
-### 1. Camera Tab
-- **Streaming ao vivo** de câmeras USB
-- **Gravação de vídeo** com controle de resolução
-- Suporte para múltiplas câmeras
-- Download de gravações
-
-### 2. Tracking Tab
-- **Rastreamento YOLO** com modelos customizados
-- **Desenho interativo de ROIs** (Rectangle, Circle, Polygon)
-- Configuração de thresholds (confidence, IOU)
-- Visualização em tempo real do progresso
-- Export de dados de rastreamento (JSON)
-
-### 3. Ethological Analysis Tab
-- **Análise de heatmap** de movimento
-- **Métricas de movimento**: velocidade, distância, centro de massa
-- **Análise de Open Field**: tempo em centro vs periferia
-- Visualizações estatísticas completas
-- Export de gráficos e análises
-
-### 4. Extra Tools Tab
-- **Diagnóstico de GPU** (CUDA/MPS)
-- **Teste de performance** YOLO (GPU vs CPU)
-- Informações do sistema
-
-### 5. Synthetic Data & IRL Analysis
-- Placeholders para futuras implementações
-
-## 📦 Instalação
+## 🚀 Início Rápido
 
 ### Pré-requisitos
+- Python >= 3.11
+- Node.js >= 18.0
+- ffmpeg (para extração de timestamps de vídeo)
 
-- **Node.js** >= 18.0.0
-- **Python** >= 3.11
-- **npm** ou **yarn** (para frontend)
-- **pip** ou **uv** (para backend)
+### Instalação
 
-### Frontend
-
+**1. Backend:**
 ```bash
-cd app-web/frontend
+cd backend
 
-# Instalar dependências
-npm install
-
-# Executar em modo desenvolvimento
-npm run dev
-
-# Build para produção
-npm run build
-```
-
-O frontend estará disponível em `http://localhost:5173`
-
-### Backend
-
-```bash
-cd app-web/backend
-
-# Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate     # Windows
+# Ativar ambiente virtual (na raiz do projeto)
+source ../.venv/bin/activate
 
 # Instalar dependências
 pip install -r requirements.txt
-
-# OU usando uv (recomendado)
-uv sync
 
 # Executar servidor
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-O backend estará disponível em `http://localhost:8000`
-Documentação da API: `http://localhost:8000/docs`
-
-### Instalação Completa com GPU (Opcional)
-
-Para habilitar aceleração GPU (NVIDIA CUDA ou Apple Silicon MPS):
-
+**2. Frontend:**
 ```bash
-# PyTorch com CUDA (NVIDIA)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+cd frontend
 
-# OU PyTorch com suporte MPS (Apple Silicon)
-pip install torch torchvision
+# Instalar dependências
+npm install
 
-# YOLO
-pip install ultralytics>=8.0.0
+# Executar em desenvolvimento
+npm run dev
 ```
 
-## 🔧 Configuração
+### Acesso
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
 
-### Backend (.env)
+## 📁 Estrutura do Projeto
 
-Copie o arquivo `.env.example` para `.env` e configure:
-
-```env
-HOST=0.0.0.0
-PORT=8000
-DEBUG=True
-CORS_ORIGINS=http://localhost:5173,http://localhost:5173
+```
+pymice-react/
+├── backend/                 # API FastAPI
+│   ├── app/
+│   │   ├── routers/        # Endpoints REST
+│   │   ├── models/         # Schemas Pydantic
+│   │   ├── processing/     # Lógica de processamento
+│   │   └── main.py         # Entry point
+│   └── temp/               # Arquivos temporários
+│       ├── videos/         # Vídeos uploaded
+│       ├── models/         # Modelos YOLO (.pt)
+│       ├── tracking/       # Resultados de tracking
+│       └── roi_templates/  # Templates de ROI salvos
+│
+└── frontend/               # Aplicação React
+    ├── src/
+    │   ├── components/     # Componentes reutilizáveis
+    │   ├── pages/          # Páginas principais
+    │   ├── services/       # Cliente API
+    │   ├── types/          # Tipos TypeScript
+    │   └── utils/          # Utilitários
+    └── public/             # Assets estáticos
 ```
 
-### Frontend
+## ✨ Funcionalidades
 
-As configurações estão no `vite.config.ts`. O proxy está configurado para redirecionar `/api` para `http://localhost:8000`.
+### 1. Camera Tab
+- Streaming ao vivo de câmeras USB
+- Gravação de vídeo com controle de resolução
+- Download de gravações
 
-## 📖 Uso
+### 2. Tracking Tab
+- **Upload de vídeo** e seleção de modelo YOLO
+- **Desenho interativo de ROIs**: Rectangle, Circle, Polygon
+- **Templates de ROI**: Salve e reutilize configurações de experimentos
+- **Tracking em tempo real** com visualização ao vivo
+- **Detecção dual**: YOLO + Template Matching (fallback)
+- **ROI highlighting**: ROIs mudam de cor quando o animal entra nelas
+- **Export de resultados** em JSON com timestamps precisos
 
-### 1. Gravação de Vídeo
+### 3. Ethological Analysis Tab
+- Análise de heatmap de movimento
+- Métricas de velocidade e distância
+- Análise de Open Field
+- Visualizações estatísticas
 
-1. Acesse a aba **Camera**
-2. Selecione o dispositivo de câmera
-3. Escolha a resolução desejada
-4. Clique em **Start Stream** para visualizar
-5. Clique em **Start Recording** para gravar
-6. **Stop Recording** e faça o download
+### 4. Extra Tools Tab
+- Diagnóstico de GPU (CUDA/MPS)
+- Teste de performance YOLO
 
-### 2. Rastreamento de Movimento
-
-1. Acesse a aba **Tracking**
-2. Faça upload de um vídeo ou use um gravado
-3. Selecione o modelo YOLO (ou faça upload de um customizado)
-4. Desenhe os ROIs clicando e arrastando no canvas
-5. Ajuste os thresholds de detecção
-6. Clique em **Start Tracking**
-7. Aguarde o processamento
-8. Download dos resultados em JSON
-
-### 3. Análise Etológica
-
-1. Acesse a aba **Ethological Analysis**
-2. Faça upload do vídeo e do JSON de rastreamento
-3. Selecione o tipo de análise:
-   - **Complete Analysis**: Painel completo com todas métricas
-   - **Heatmap Only**: Apenas mapa de calor
-   - **Movement Analysis**: Gráficos de velocidade e trajetória
-4. Configure parâmetros do heatmap (resolução, colormap, transparência)
-5. Clique em **Generate Analysis**
-6. Visualize e exporte os resultados
-
-## 🎨 Tecnologias Utilizadas
+## 🔧 Tecnologias
 
 ### Frontend
-- **React 18** - UI Library
-- **TypeScript** - Type Safety
-- **Vite** - Build Tool
-- **TailwindCSS** - Styling
-- **React Konva** - Canvas Drawing
-- **Axios** - HTTP Client
-- **Zustand** - State Management
-- **TanStack Query** - Data Fetching
-- **Recharts** - Charts & Visualizations
-- **Lucide React** - Icons
+- React 18 + TypeScript
+- Vite (build tool)
+- TailwindCSS (styling)
+- Axios (HTTP client)
+- Lucide React (ícones)
 
 ### Backend
-- **FastAPI** - Web Framework
-- **Pydantic** - Data Validation
-- **OpenCV** - Computer Vision
-- **NumPy/Pandas** - Data Processing
-- **Matplotlib/Seaborn** - Visualizations
-- **PyTorch** - Deep Learning (opcional)
-- **Ultralytics YOLO** - Object Detection (opcional)
+- FastAPI (framework web)
+- Pydantic (validação)
+- OpenCV (processamento de vídeo)
+- Ultralytics YOLO (detecção)
+- PyTorch (deep learning)
+- ffmpeg/ffprobe (extração de metadados)
 
-## 🔌 API Endpoints
-
-### Camera
-- `GET /api/camera/devices` - Listar câmeras disponíveis
-- `POST /api/camera/stream/start` - Iniciar stream
-- `POST /api/camera/stream/stop` - Parar stream
-- `GET /api/camera/frame` - Obter frame atual
-- `POST /api/camera/record/start` - Iniciar gravação
-- `POST /api/camera/record/stop` - Parar gravação
-
-### Video
-- `POST /api/video/upload` - Upload de vídeo
-- `GET /api/video/info/{filename}` - Informações do vídeo
-- `GET /api/video/download/{filename}` - Download de vídeo
-- `GET /api/video/list` - Listar vídeos
+## 📡 API Endpoints Principais
 
 ### Tracking
 - `GET /api/tracking/models` - Listar modelos YOLO
-- `POST /api/tracking/models/upload` - Upload de modelo
 - `POST /api/tracking/start` - Iniciar rastreamento
-- `GET /api/tracking/progress/{task_id}` - Progresso do rastreamento
-- `POST /api/tracking/stop/{task_id}` - Parar rastreamento
-- `GET /api/tracking/results/{task_id}` - Download de resultados
+- `GET /api/tracking/progress/{task_id}` - Progresso
+- `GET /api/tracking/frame/{task_id}` - Frame atual (live preview)
+- `GET /api/tracking/results/{task_id}` - Download resultados
 
-### ROI
-- `GET /api/roi/presets` - Listar presets
-- `GET /api/roi/presets/{name}` - Carregar preset
-- `POST /api/roi/presets` - Salvar preset
-- `DELETE /api/roi/presets/{name}` - Deletar preset
+### ROI Templates
+- `GET /api/tracking/roi-templates/list` - Listar templates
+- `POST /api/tracking/roi-templates/save` - Salvar template
+- `GET /api/tracking/roi-templates/load/{filename}` - Carregar template
+- `DELETE /api/tracking/roi-templates/delete/{filename}` - Deletar template
 
-### Analysis
-- `POST /api/analysis/heatmap` - Gerar heatmap
-- `POST /api/analysis/movement` - Análise de movimento
-- `POST /api/analysis/open-field` - Análise Open Field
-- `POST /api/analysis/export-video` - Exportar vídeo com overlay
+### Camera & Video
+- `GET /api/camera/devices` - Listar câmeras
+- `POST /api/camera/stream/start` - Iniciar stream
+- `POST /api/video/upload` - Upload de vídeo
 
-### System
-- `GET /api/system/gpu` - Status da GPU
-- `POST /api/system/test-yolo` - Teste de performance
+Documentação completa: http://localhost:8000/docs
 
-## 🤝 Comparação com a Versão Original
+## 🎯 Como Usar
 
-| Recurso | Original (Panel) | Web (React) |
-|---------|-----------------|-------------|
-| Framework UI | Panel/Bokeh | React + TypeScript |
-| Arquitetura | Monolítica | Cliente-Servidor |
-| API | Interno | REST API (FastAPI) |
-| Estado | Callbacks Python | React Hooks + Zustand |
-| Canvas | Bokeh Canvas | HTML5 Canvas + Konva |
-| Styling | Panel CSS | TailwindCSS |
-| Deployment | Single Server | Frontend + Backend separados |
-| Performance | Boa | Excelente (otimizado) |
+### Rastreamento com Templates de ROI
 
-## 📝 Próximos Passos
+1. **Carregar vídeo** na aba Tracking
+2. **Desenhar ROIs** (Rectangle, Circle ou Polygon)
+3. **Salvar como template** com nome do experimento (ex: "Open Field Test")
+4. **Próximas vezes**: apenas selecione o template e clique em "Load"
+5. **Iniciar tracking** - visualize em tempo real
+6. **Download dos resultados** em JSON com:
+   - Timestamps precisos (via ffmpeg)
+   - Coordenadas do centroid
+   - ROI ativa por frame
+   - Método de detecção (YOLO/template)
+   - Estatísticas completas
 
-- [ ] Implementar processamento YOLO real no backend
-- [ ] Adicionar suporte para múltiplos animais
-- [ ] Implementar análise de Open Field completa
-- [ ] Adicionar autenticação de usuários
-- [ ] Sistema de cache para resultados
-- [ ] WebSocket para progresso em tempo real
-- [ ] Exportar vídeo com overlay
-- [ ] Testes unitários e E2E
-- [ ] Docker deployment
-- [ ] CI/CD pipeline
+### Estrutura do JSON de Resultados
+
+```json
+{
+  "video_name": "video.mp4",
+  "timestamp": "2025-01-15T...",
+  "video_info": {
+    "total_frames": 1000,
+    "fps": 30.0,
+    "duration_sec": 33.33,
+    "codec": "h264"
+  },
+  "statistics": {
+    "yolo_detections": 800,
+    "template_detections": 190,
+    "detection_rate": 99.0
+  },
+  "rois": [...],
+  "tracking_data": [
+    {
+      "frame_number": 0,
+      "timestamp_sec": 0.0,
+      "centroid_x": 320.5,
+      "centroid_y": 240.2,
+      "roi": "roi_0",
+      "roi_index": 0,
+      "detection_method": "yolo"
+    }
+  ]
+}
+```
+
+## 🐛 Resolução de Problemas
+
+### Modelos YOLO não aparecem
+1. Verifique se há arquivos `.pt` em `backend/temp/models/`
+2. Recarregue a página (Ctrl+Shift+R)
+3. Verifique o console do backend para erros
+
+### Porta já em uso
+```bash
+# Linux/Mac
+kill $(lsof -t -i:8000)  # Backend
+kill $(lsof -t -i:5173)  # Frontend
+
+# Windows
+netstat -ano | findstr :8000
+taskkill /PID <PID> /F
+```
+
+### Erro ao processar vídeo
+- Verifique se ffmpeg está instalado: `ffmpeg -version`
+- Confirme que o modelo YOLO é compatível (ultralytics >= 8.3.0)
+- Veja logs do backend para detalhes
+
+### Frontend não conecta ao backend
+- Confirme que o backend está rodando na porta 8000
+- Verifique o proxy no `vite.config.ts`
+- Abra as DevTools e veja a aba Network
+
+## 📝 Notas Importantes
+
+- **Modelos YOLO**: Coloque arquivos `.pt` em `backend/temp/models/`
+- **GPU**: Auto-detecta CUDA/MPS, fallback para CPU
+- **Detecção Dual**: YOLO primeiro, template matching como fallback
+- **Timestamps**: Extraídos via ffmpeg/ffprobe para máxima precisão
+- **Live Preview**: Atualiza a cada 500ms durante tracking
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
 
 ## 📄 Licença
 
-MIT License - Veja o arquivo LICENSE no diretório raiz do projeto.
-
-## 👥 Contribuindo
-
-Contribuições são bem-vindas! Por favor, abra uma issue ou pull request.
-
-## 📧 Suporte
-
-Para questões e suporte, abra uma issue no repositório.
+MIT License
 
 ---
 

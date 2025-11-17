@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { Cpu, Zap, CheckCircle, XCircle } from 'lucide-react'
 import { systemApi } from '@/services/api'
 
-export default function ExtraToolsTab() {
+interface ExtraToolsTabProps {
+  onTrackingStateChange?: (isTracking: boolean) => void
+}
+
+export default function ExtraToolsTab(_props: ExtraToolsTabProps = {}) {
   const [gpuStatus, setGpuStatus] = useState<{
     cuda: boolean
     mps: boolean

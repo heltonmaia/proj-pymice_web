@@ -20,6 +20,7 @@ const tabs = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('camera')
+  const [isTrackingActive, setIsTrackingActive] = useState(false)
 
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || CameraTab
 
@@ -52,15 +53,21 @@ function App() {
           <div className="flex gap-2 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
+              const isCurrentTab = activeTab === tab.id
+              const isDisabled = isTrackingActive && !isCurrentTab
+
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => !isDisabled && setActiveTab(tab.id)}
+                  disabled={isDisabled}
                   className={`
                     flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap
-                    ${activeTab === tab.id
+                    ${isCurrentTab
                       ? 'border-primary-500 text-primary-400 bg-gray-700/50'
-                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'
+                      : isDisabled
+                        ? 'border-transparent text-gray-600 cursor-not-allowed opacity-50'
+                        : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'
                     }
                   `}
                 >
@@ -75,7 +82,7 @@ function App() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
-        <ActiveComponent />
+        <ActiveComponent onTrackingStateChange={setIsTrackingActive} />
       </main>
 
       {/* Footer */}

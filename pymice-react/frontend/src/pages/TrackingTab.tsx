@@ -4,7 +4,11 @@ import type { ROI, ROIType, VideoItem } from '@/types'
 import { drawROI } from '@/utils/canvas'
 import { videoApi, trackingApi } from '@/services/api'
 
-export default function TrackingTab() {
+interface TrackingTabProps {
+  onTrackingStateChange?: (isTracking: boolean) => void
+}
+
+export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps = {}) {
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [uploadedFilename, setUploadedFilename] = useState<string>('')
   const [modelFile, setModelFile] = useState<string>('')
@@ -55,6 +59,11 @@ export default function TrackingTab() {
     // Auto-scroll to latest log
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [trackingLogs])
+
+  useEffect(() => {
+    // Notify parent component about tracking state changes
+    onTrackingStateChange?.(isTracking)
+  }, [isTracking, onTrackingStateChange])
 
   const addLog = (message: string) => {
     const time = new Date().toLocaleTimeString()

@@ -3,7 +3,11 @@ import { Upload, BarChart3, Download, ImageIcon, ChevronDown, ChevronUp } from '
 import type { TrackingData, HeatmapSettings } from '@/types'
 import { analysisApi } from '@/services/api'
 
-export default function EthologicalTab() {
+interface EthologicalTabProps {
+  onTrackingStateChange?: (isTracking: boolean) => void
+}
+
+export default function EthologicalTab(_props: EthologicalTabProps = {}) {
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null)
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [heatmapSettings, setHeatmapSettings] = useState<HeatmapSettings>({

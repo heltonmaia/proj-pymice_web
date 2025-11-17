@@ -1,6 +1,10 @@
 import { Globe } from 'lucide-react'
 
-export default function IRLTab() {
+interface IRLTabProps {
+  onTrackingStateChange?: (isTracking: boolean) => void
+}
+
+export default function IRLTab(_props: IRLTabProps = {}) {
   return (
     <div className="space-y-6">
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">

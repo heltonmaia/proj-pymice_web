@@ -120,6 +120,7 @@ export interface ProcessingProgress {
   percentage: number;
   status: 'processing' | 'completed' | 'error';
   error?: string;
+  device?: string;
 }
 
 // Video Info

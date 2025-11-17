@@ -5,20 +5,55 @@ Aplicação web moderna para rastreamento e análise comportamental de camundong
 ## 🚀 Início Rápido
 
 ### Pré-requisitos
-- Python >= 3.11
+- Python 3.11
 - Node.js >= 18.0
 - ffmpeg (para extração de timestamps de vídeo)
+- CUDA Toolkit 12.4 (opcional, para aceleração GPU)
 
-### Instalação
+### Método Recomendado: Script Unificado
+
+O projeto inclui um script unificado `run.sh` que gerencia todo o ambiente automaticamente:
+
+```bash
+# Tornar o script executável (primeira vez)
+chmod +x run.sh
+
+# Iniciar frontend + backend
+./run.sh start
+
+# Ver status dos serviços
+./run.sh status
+
+# Parar serviços
+./run.sh stop
+
+# Reiniciar
+./run.sh restart
+
+# Menu interativo
+./run.sh
+```
+
+**Ambiente Virtual UV:**
+- O backend usa um ambiente UV localizado em `uv-env/`
+- O `run.sh` ativa automaticamente o ambiente correto
+- Inclui PyTorch 2.6.0 com suporte CUDA 12.4
+
+**Verificar GPU:**
+```bash
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
+```
+
+### Instalação Manual (Alternativa)
 
 **1. Backend:**
 ```bash
 cd backend
 
-# Ativar ambiente virtual (na raiz do projeto)
-source ../.venv/bin/activate
+# Ativar ambiente UV
+source ../uv-env/bin/activate
 
-# Instalar dependências
+# Instalar dependências (se necessário)
 pip install -r requirements.txt
 
 # Executar servidor
@@ -40,6 +75,7 @@ npm run dev
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
+- **Logs**: `tail -f logs/*.log`
 
 ## 📁 Estrutura do Projeto
 
@@ -90,8 +126,9 @@ pymice-react/
 - Visualizações estatísticas
 
 ### 4. Extra Tools Tab
-- Diagnóstico de GPU (CUDA/MPS)
+- Diagnóstico de GPU (CUDA/MPS/CPU)
 - Teste de performance YOLO
+- Durante o tracking, o log mostra automaticamente qual device está sendo usado (GPU/CPU)
 
 ## 🔧 Tecnologias
 
@@ -103,11 +140,12 @@ pymice-react/
 - Lucide React (ícones)
 
 ### Backend
+- Python 3.11
 - FastAPI (framework web)
 - Pydantic (validação)
+- PyTorch 2.6.0 (deep learning, CUDA 12.4)
+- Ultralytics 8.3.102 (YOLO detecção)
 - OpenCV (processamento de vídeo)
-- Ultralytics YOLO (detecção)
-- PyTorch (deep learning)
 - ffmpeg/ffprobe (extração de metadados)
 
 ## 📡 API Endpoints Principais

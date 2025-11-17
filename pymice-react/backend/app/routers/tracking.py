@@ -138,13 +138,6 @@ async def upload_model(file: UploadFile = File(...)):
 def run_tracking_task(task_id: str, request: TrackingRequest):
     """Background task to run YOLO tracking"""
     try:
-        tracking_tasks[task_id] = {
-            "status": "processing",
-            "current_frame": 0,
-            "total_frames": 0,
-            "percentage": 0,
-        }
-
         # Detect GPU availability
         if torch.cuda.is_available():
             device = "cuda"
@@ -154,6 +147,14 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             device = "cpu"
 
         print(f"Using device: {device}")
+
+        tracking_tasks[task_id] = {
+            "status": "processing",
+            "current_frame": 0,
+            "total_frames": 0,
+            "percentage": 0,
+            "device": device,
+        }
 
         # Load YOLO model
         model_path = os.path.join(MODEL_DIR, request.model_name)
@@ -364,7 +365,8 @@ async def get_progress(task_id: str):
             current_frame=task.get("current_frame", 0),
             total_frames=task.get("total_frames", 0),
             percentage=task.get("percentage", 0),
-            status=task.get("status", "processing")
+            status=task.get("status", "processing"),
+            device=task.get("device")
         ).model_dump()
     )
 

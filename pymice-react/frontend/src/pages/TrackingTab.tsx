@@ -269,6 +269,7 @@ export default function TrackingTab() {
 
   const pollTrackingCompletion = async (taskId: string, videoIndex: number): Promise<any> => {
     return new Promise((resolve, reject) => {
+      let deviceLogged = false
       const interval = setInterval(async () => {
         try {
           // Check if stop was requested
@@ -282,6 +283,14 @@ export default function TrackingTab() {
           if (progressResponse.data.success && progressResponse.data.data) {
             const progressData = progressResponse.data.data
             updateVideoField(videoIndex, 'progress', progressData.percentage || 0)
+
+            // Log device info once when available
+            if (!deviceLogged && progressData.device) {
+              const deviceEmoji = progressData.device === 'cuda' ? '🎮' : progressData.device === 'mps' ? '🍎' : '💻'
+              const deviceName = progressData.device === 'cuda' ? 'GPU (CUDA)' : progressData.device === 'mps' ? 'GPU (MPS)' : 'CPU'
+              addLog(`[Video ${videoIndex + 1}/${videoFiles.length}] ${deviceEmoji} Using device: ${deviceName}`)
+              deviceLogged = true
+            }
 
             // Update tracking frame URL for live preview (same as single video mode)
             setTrackingFrameUrl(`/api/tracking/frame/${taskId}?t=${Date.now()}`)
@@ -816,12 +825,21 @@ export default function TrackingTab() {
         addLog('Tracking started successfully')
 
         // Poll for progress and frames
+        let deviceLogged = false
         const interval = setInterval(async () => {
           try {
             const progressResponse = await trackingApi.getProgress(newTaskId)
             if (progressResponse.data.success && progressResponse.data.data) {
               const progressData = progressResponse.data.data
               setProgress(progressData.percentage || 0)
+
+              // Log device info once when available
+              if (!deviceLogged && progressData.device) {
+                const deviceEmoji = progressData.device === 'cuda' ? '🎮' : progressData.device === 'mps' ? '🍎' : '💻'
+                const deviceName = progressData.device === 'cuda' ? 'GPU (CUDA)' : progressData.device === 'mps' ? 'GPU (MPS)' : 'CPU'
+                addLog(`${deviceEmoji} Using device: ${deviceName}`)
+                deviceLogged = true
+              }
 
               // Update tracking frame URL for live preview
               setTrackingFrameUrl(`/api/tracking/frame/${newTaskId}?t=${Date.now()}`)

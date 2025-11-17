@@ -97,6 +97,7 @@ class ProcessingProgress(BaseModel):
     total_frames: int
     percentage: float
     status: Literal["processing", "completed", "error"]
+    device: Optional[str] = None
 
 
 # Video Models

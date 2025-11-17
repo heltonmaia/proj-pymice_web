@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Cpu, Zap, CheckCircle, XCircle } from 'lucide-react'
+import { systemApi } from '@/services/api'
 
 export default function ExtraToolsTab() {
   const [gpuStatus, setGpuStatus] = useState<{
@@ -16,28 +17,48 @@ export default function ExtraToolsTab() {
 
   const checkGPU = async () => {
     setTesting(true)
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await systemApi.checkGPU()
+      if (response.data.success) {
+        setGpuStatus({
+          cuda: response.data.data.cuda_available,
+          mps: response.data.data.mps_available,
+          device: response.data.data.device,
+        })
+      }
+    } catch (error) {
+      console.error('Error checking GPU:', error)
       setGpuStatus({
         cuda: false,
         mps: false,
         device: 'cpu',
       })
+    } finally {
       setTesting(false)
-    }, 1000)
+    }
   }
 
   const testYOLO = async () => {
     setTesting(true)
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await systemApi.testYOLO('yolov11n.pt')
+      if (response.data.success) {
+        setYoloTest({
+          gpuTime: response.data.data.gpu_time,
+          cpuTime: response.data.data.cpu_time,
+          speedup: response.data.data.speedup,
+        })
+      }
+    } catch (error) {
+      console.error('Error testing YOLO:', error)
       setYoloTest({
         gpuTime: 0,
-        cpuTime: 45.2,
+        cpuTime: 0,
         speedup: 0,
       })
+    } finally {
       setTesting(false)
-    }, 3000)
+    }
   }
 
   return (

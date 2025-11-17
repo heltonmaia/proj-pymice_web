@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { Camera, Video, Download, Square, Circle } from 'lucide-react'
 import { cameraApi } from '@/services/api'
 
-export default function CameraTab() {
+interface CameraTabProps {
+  onTrackingStateChange?: (isTracking: boolean) => void
+}
+
+export default function CameraTab(_props: CameraTabProps = {}) {
   const [devices, setDevices] = useState<number[]>([])
   const [selectedDevice, setSelectedDevice] = useState<number>(0)
   const [isStreaming, setIsStreaming] = useState(false)

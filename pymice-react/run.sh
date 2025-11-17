@@ -138,37 +138,21 @@ start_services() {
 
         cd backend
 
-        # Verificar ambiente virtual
-        VENV_PATH=""
+        # Verificar ambiente virtual UV
+        VENV_PATH="../uv-env"
 
-        # 1. Tentar usar .venv do projeto raiz
-        if [ -d "../../.venv" ]; then
-            echo "   Usando ambiente virtual do projeto (../../.venv)..."
-            VENV_PATH="../../.venv"
-        # 2. Tentar usar venv local
-        elif [ -d "venv" ]; then
-            echo "   Usando ambiente virtual local (venv)..."
-            VENV_PATH="venv"
-        # 3. Tentar criar novo venv local
-        else
-            echo "   Criando ambiente virtual local..."
-            if python3 -m venv venv 2>/dev/null; then
-                VENV_PATH="venv"
-            else
-                echo ""
-                echo -e "${RED}✗ Erro ao criar ambiente virtual!${NC}"
-                echo ""
-                echo -e "${YELLOW}Solução:${NC}"
-                echo "  1. Instale o pacote python3-venv:"
-                echo -e "     ${CYAN}sudo apt install python3-venv${NC}"
-                echo ""
-                echo "  2. OU use o ambiente virtual do projeto raiz:"
-                echo -e "     ${CYAN}cd .. && python3 -m venv .venv${NC}"
-                echo ""
-                cd ..
-                exit 1
-            fi
+        if [ ! -d "$VENV_PATH" ]; then
+            echo ""
+            echo -e "${RED}✗ Ambiente virtual UV não encontrado!${NC}"
+            echo ""
+            echo -e "${YELLOW}Solução:${NC}"
+            echo "  Configure o ambiente UV conforme SETUP_UV.md"
+            echo ""
+            cd ..
+            exit 1
         fi
+
+        echo "   Usando ambiente virtual UV (uv-env)..."
 
         # Ativar venv
         source "$VENV_PATH/bin/activate"

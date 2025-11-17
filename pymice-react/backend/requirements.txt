@@ -16,7 +16,12 @@ python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 python-dotenv>=1.0.0
 
-# Optional: GPU support
-# torch>=2.0.0
-# torchvision>=0.15.0
-# ultralytics>=8.0.0
+# GPU support (versões do ambiente streamlit com suporte CUDA)
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0
+ultralytics==8.3.102
+
+# Pacotes CUDA necessários para GPU
+# Estes serão instalados automaticamente como dependências do torch
+# mas listados aqui para referência das versões do ambiente streamlit

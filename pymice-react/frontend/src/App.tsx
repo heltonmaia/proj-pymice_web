@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Camera, Target, BarChart3, Wrench, Beaker, Globe } from 'lucide-react'
+import MouseIcon from './components/MouseIcon'
+import AnimatedMouse from './components/AnimatedMouse'
 import CameraTab from './pages/CameraTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
@@ -18,20 +20,24 @@ const tabs = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('camera')
+  const [isTrackingActive, setIsTrackingActive] = useState(false)
 
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || CameraTab
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+      <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50 relative">
+        {/* Animated Mouse */}
+        <AnimatedMouse trigger={activeTab} />
+
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Target className="w-8 h-8 text-primary-500" />
+              <MouseIcon className="w-10 h-10 text-primary-500" style={{ transform: 'scaleX(-1)' }} />
               <div>
                 <h1 className="text-2xl font-bold text-white">PyMiceTracking</h1>
-                <p className="text-sm text-gray-400">Web Application for Mouse Behavioral Analysis</p>
+                <p className="text-sm text-gray-400">Web Application for Mice Behavioral Analysis</p>
               </div>
             </div>
             <div className="text-sm text-gray-400">
@@ -47,15 +53,21 @@ function App() {
           <div className="flex gap-2 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
+              const isCurrentTab = activeTab === tab.id
+              const isDisabled = isTrackingActive && !isCurrentTab
+
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => !isDisabled && setActiveTab(tab.id)}
+                  disabled={isDisabled}
                   className={`
                     flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap
-                    ${activeTab === tab.id
+                    ${isCurrentTab
                       ? 'border-primary-500 text-primary-400 bg-gray-700/50'
-                      : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'
+                      : isDisabled
+                        ? 'border-transparent text-gray-600 cursor-not-allowed opacity-50'
+                        : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'
                     }
                   `}
                 >
@@ -70,7 +82,7 @@ function App() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
-        <ActiveComponent />
+        <ActiveComponent onTrackingStateChange={setIsTrackingActive} />
       </main>
 
       {/* Footer */}

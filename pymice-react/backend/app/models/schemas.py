@@ -52,17 +52,34 @@ class TrackingFrame(BaseModel):
     centroid_x: float
     centroid_y: float
     roi: Optional[str] = None
+    roi_index: Optional[int] = None
     detection_method: Literal["yolo", "template"]
+    timestamp_sec: float
+
+
+class VideoInfo(BaseModel):
+    total_frames: int
+    fps: float
+    frame_width: Optional[int] = None
+    frame_height: Optional[int] = None
+    duration_sec: Optional[float] = None
+    codec: Optional[str] = None
+    ffprobe_duration: Optional[float] = None
+
+
+class TrackingStatistics(BaseModel):
+    frames_without_detection: int
+    yolo_detections: int
+    template_detections: int
+    detection_rate: float
 
 
 class TrackingData(BaseModel):
     video_name: str
-    experiment_type: str
+    experiment_type: Optional[str] = None
     timestamp: str
-    total_frames: int
-    frames_without_detection: int
-    yolo_detections: int
-    template_detections: int
+    video_info: VideoInfo
+    statistics: TrackingStatistics
     rois: List[ROI]
     tracking_data: List[TrackingFrame]
 
@@ -80,6 +97,7 @@ class ProcessingProgress(BaseModel):
     total_frames: int
     percentage: float
     status: Literal["processing", "completed", "error"]
+    device: Optional[str] = None
 
 
 # Video Models
@@ -119,6 +137,10 @@ class HeatmapSettings(BaseModel):
     resolution: int = Field(ge=20, le=100)
     colormap: Literal["hot", "viridis", "plasma", "jet", "rainbow", "coolwarm"]
     transparency: float = Field(ge=0.0, le=1.0)
+    movement_threshold_percentile: int = Field(default=75, ge=50, le=95)
+    velocity_bins: int = Field(default=50, ge=20, le=100)
+    gaussian_sigma: float = Field(default=1.0, ge=0.0, le=3.0)
+    moving_average_window: int = Field(default=30, ge=5, le=200)
 
 
 class HeatmapRequest(BaseModel):

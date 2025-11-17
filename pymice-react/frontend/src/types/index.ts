@@ -41,17 +41,34 @@ export interface TrackingFrame {
   centroid_x: number;
   centroid_y: number;
   roi: string | null;
+  roi_index: number | null;
   detection_method: 'yolo' | 'template';
+  timestamp_sec: number;
+}
+
+export interface VideoInfo {
+  total_frames: number;
+  fps: number;
+  frame_width?: number;
+  frame_height?: number;
+  duration_sec?: number;
+  codec?: string;
+  ffprobe_duration?: number;
+}
+
+export interface TrackingStatistics {
+  frames_without_detection: number;
+  yolo_detections: number;
+  template_detections: number;
+  detection_rate: number;
 }
 
 export interface TrackingData {
   video_name: string;
-  experiment_type: string;
+  experiment_type?: string;
   timestamp: string;
-  total_frames: number;
-  frames_without_detection: number;
-  yolo_detections: number;
-  template_detections: number;
+  video_info: VideoInfo;
+  statistics: TrackingStatistics;
   rois: ROI[];
   tracking_data: TrackingFrame[];
 }
@@ -78,6 +95,10 @@ export interface HeatmapSettings {
   resolution: number;
   colormap: 'hot' | 'viridis' | 'plasma' | 'jet' | 'rainbow' | 'coolwarm';
   transparency: number;
+  movement_threshold_percentile?: number;
+  velocity_bins?: number;
+  gaussian_sigma?: number;
+  moving_average_window?: number;
 }
 
 // API Response Types
@@ -98,6 +119,8 @@ export interface ProcessingProgress {
   total_frames: number;
   percentage: number;
   status: 'processing' | 'completed' | 'error';
+  error?: string;
+  device?: string;
 }
 
 // Video Info
@@ -108,6 +131,18 @@ export interface VideoInfo {
   fps: number;
   total_frames: number;
   duration: number;
+}
+
+// Batch Processing
+export interface VideoItem {
+  file: File
+  filename: string
+  status: 'pending' | 'uploading' | 'tracking' | 'completed' | 'error'
+  progress: number
+  result?: any
+  error?: string
+  uploadedFilename?: string
+  taskId?: string
 }
 
 // App State

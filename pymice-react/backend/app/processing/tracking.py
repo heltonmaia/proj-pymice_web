@@ -52,32 +52,90 @@ def create_roi_mask(rois: List[ROI], frame_shape: tuple[int, int]) -> Optional[n
     return mask
 
 
-def draw_rois(frame: np.ndarray, rois: List[ROI], color: tuple = (0, 255, 0), thickness: int = 2):
+def point_in_roi(point: Point, roi: ROI) -> bool:
+    """
+    Check if a point is inside an ROI.
+
+    Args:
+        point: (x, y) coordinates
+        roi: ROI object
+
+    Returns:
+        True if point is inside ROI, False otherwise
+    """
+    x, y = point
+
+    if roi.roi_type == "Rectangle":
+        x1 = int(roi.center_x - roi.width / 2)
+        y1 = int(roi.center_y - roi.height / 2)
+        x2 = int(roi.center_x + roi.width / 2)
+        y2 = int(roi.center_y + roi.height / 2)
+        return x1 <= x <= x2 and y1 <= y <= y2
+
+    elif roi.roi_type == "Circle":
+        center_x = int(roi.center_x)
+        center_y = int(roi.center_y)
+        radius = int(roi.radius)
+        distance = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+        return distance <= radius
+
+    elif roi.roi_type == "Polygon":
+        points = np.array(roi.vertices, dtype=np.int32)
+        # Use OpenCV's pointPolygonTest
+        result = cv2.pointPolygonTest(points, (float(x), float(y)), False)
+        return result >= 0
+
+    return False
+
+
+def get_roi_containing_point(point: Point, rois: List[ROI]) -> Optional[int]:
+    """
+    Find which ROI contains a point.
+
+    Args:
+        point: (x, y) coordinates
+        rois: List of ROI objects
+
+    Returns:
+        Index of ROI containing the point, or None if not in any ROI
+    """
+    for idx, roi in enumerate(rois):
+        if point_in_roi(point, roi):
+            return idx
+    return None
+
+
+def draw_rois(frame: np.ndarray, rois: List[ROI], color: tuple = (0, 255, 0),
+              thickness: int = 2, active_roi_index: Optional[int] = None):
     """
     Draw ROI overlays on frame.
 
     Args:
         frame: Video frame to draw on (BGR)
         rois: List of ROI objects
-        color: BGR color tuple
+        color: BGR color tuple for normal ROIs
         thickness: Line thickness
+        active_roi_index: Index of the ROI currently containing the animal (will be highlighted)
     """
-    for roi in rois:
+    for idx, roi in enumerate(rois):
+        # Use brighter color for active ROI
+        roi_color = (0, 255, 255) if idx == active_roi_index else color  # Yellow for active, green for inactive
+
         if roi.roi_type == "Rectangle":
             x1 = int(roi.center_x - roi.width / 2)
             y1 = int(roi.center_y - roi.height / 2)
             x2 = int(roi.center_x + roi.width / 2)
             y2 = int(roi.center_y + roi.height / 2)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), roi_color, thickness)
 
         elif roi.roi_type == "Circle":
             center = (int(roi.center_x), int(roi.center_y))
             radius = int(roi.radius)
-            cv2.circle(frame, center, radius, color, thickness)
+            cv2.circle(frame, center, radius, roi_color, thickness)
 
         elif roi.roi_type == "Polygon":
             points = np.array(roi.vertices, dtype=np.int32)
-            cv2.polylines(frame, [points], True, color, thickness)
+            cv2.polylines(frame, [points], True, roi_color, thickness)
 
 
 def process_frame(
@@ -171,23 +229,19 @@ def process_frame(
             print(f"Template matching failed for frame {frame_number}: {e}")
 
     # Determine which ROI the centroid is in (if any)
+    roi_index = None
     roi_name = None
-    if centroid is not None and roi_mask is not None:
-        x, y = centroid
-        if 0 <= y < roi_mask.shape[0] and 0 <= x < roi_mask.shape[1]:
-            if roi_mask[y, x] > 0:
-                # Centroid is within an ROI
-                # For simplicity, we'll just mark it as "roi_1", "roi_2", etc.
-                # In a full implementation, you'd track which specific ROI
-                for idx, roi in enumerate(rois):
-                    roi_name = f"roi_{idx}"
-                    break
+    if centroid is not None and rois:
+        roi_index = get_roi_containing_point(centroid, rois)
+        if roi_index is not None:
+            roi_name = f"roi_{roi_index}"
 
     return {
         "frame_number": frame_number,
         "centroid_x": float(centroid[0]) if centroid else None,
         "centroid_y": float(centroid[1]) if centroid else None,
         "roi": roi_name,
+        "roi_index": roi_index,
         "detection_method": detection_method,
     }
 

@@ -45,6 +45,7 @@ pymice-react/frontend/build/
 
 # Backend temp files
 pymice-react/backend/temp/
+!pymice-react/backend/temp/models/
 !pymice-react/backend/temp/models/yolo_model.pt
 
 # Logs directory

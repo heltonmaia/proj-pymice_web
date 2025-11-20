@@ -258,7 +258,8 @@ def process_frame(
 
 def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[np.ndarray]:
     """
-    Calculate median background frame from video.
+    Calculate median background frame from video using frames from the middle section.
+    This avoids noise from start/end of video (e.g., person placing/removing animal).
 
     Args:
         video_path: Path to video file
@@ -273,7 +274,14 @@ def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[
         return None
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_step = max(1, total_frames // sample_frames)
+
+    # Use middle 50% of video (from 25% to 75%)
+    start_frame = int(total_frames * 0.25)
+    end_frame = int(total_frames * 0.75)
+    middle_frames_count = end_frame - start_frame
+
+    # Calculate step to sample within middle section
+    frame_step = max(1, middle_frames_count // sample_frames)
 
     frames = []
     frame_idx = 0
@@ -283,12 +291,14 @@ def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[
         if not ret:
             break
 
-        if frame_idx % frame_step == 0:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            frames.append(gray.astype(np.float32))
+        # Only process frames in the middle section
+        if start_frame <= frame_idx <= end_frame:
+            if (frame_idx - start_frame) % frame_step == 0:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                frames.append(gray.astype(np.float32))
 
-            if len(frames) >= sample_frames:
-                break
+                if len(frames) >= sample_frames:
+                    break
 
         frame_idx += 1
 
@@ -297,7 +307,7 @@ def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[
     if not frames:
         return None
 
-    # Calculate median/average background
+    # Calculate median background
     background = np.median(np.array(frames), axis=0).astype(np.uint8)
 
     return background

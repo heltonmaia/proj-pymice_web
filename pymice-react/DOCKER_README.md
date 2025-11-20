@@ -37,11 +37,27 @@ cd pymice-react
 
 ### Windows
 
-Use Docker Desktop and WSL2:
+**Option 1: Native Windows (CMD/PowerShell)**
+```cmd
+REM Open CMD or PowerShell in project directory
+docker.bat
+
+REM Or use direct commands:
+docker.bat start
+docker.bat status
+docker.bat free-ports
+```
+
+**Option 2: WSL2 (Linux-like experience)**
 ```bash
 # Run inside WSL2
 ./docker.sh
 ```
+
+**GPU on Windows:**
+- Requires Windows 11 or Windows 10 21H2+
+- NVIDIA Driver with WSL support
+- Docker Desktop with WSL2 backend
 
 ## 🎮 GPU vs CPU Mode
 

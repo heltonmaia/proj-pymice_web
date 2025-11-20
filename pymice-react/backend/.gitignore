@@ -23,6 +23,7 @@ wheels/
 # Virtual Environment
 venv/
 env/
+uv-venv/
 ENV/
 
 # IDE
@@ -31,6 +32,9 @@ ENV/
 *.swp
 *.swo
 *~
+
+# Node Modules
+node_modules/
 
 # Environment variables
 .env

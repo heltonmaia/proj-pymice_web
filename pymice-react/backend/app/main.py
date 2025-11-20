@@ -26,7 +26,7 @@ def cleanup_temp_directories():
         "temp/videos",
         "temp/tracking",
         "temp/analysis",
-        "temp/models",
+        # "temp/models",
         "temp/roi_templates",
     ]
 

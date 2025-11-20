@@ -428,11 +428,8 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
         // 4. Store result
         const enrichedResult = {
-          video_name: videoItem.file.name,
-          original_filename: videoItem.file.name,
-          uploaded_filename: filename,
+          ...result,
           task_id: taskId,
-          ...result
         }
 
         results.push(enrichedResult)

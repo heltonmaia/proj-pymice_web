@@ -8,6 +8,7 @@ import uuid
 import json
 import io
 import cv2
+import numpy as np
 import torch
 import subprocess
 from datetime import datetime
@@ -189,6 +190,20 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
 
         tracking_tasks[task_id]["total_frames"] = total_frames
 
+        # Preview optimization: only encode every Nth frame
+        preview_skip_frames = 5  # Only update preview every 5 frames
+        jpeg_quality = 70  # Lower quality for faster encoding
+
+        # Initialize a placeholder frame for immediate preview BEFORE any heavy processing
+        # Create a simple black frame with "Processing..." text
+        placeholder_frame = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)
+        cv2.putText(placeholder_frame, "Calculating background...",
+                   (frame_width // 2 - 250, frame_height // 2),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+        _, buffer = cv2.imencode('.jpg', placeholder_frame, encode_params)
+        tracking_frames[task_id] = buffer.tobytes()
+
         # Calculate background
         print("Calculating background...")
         background_frame = calculate_background(video_path)
@@ -228,6 +243,7 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
                 confidence_threshold=request.confidence_threshold,
                 iou_threshold=request.iou_threshold,
                 device=device,
+                inference_size=request.inference_size,
             )
 
             # Add timestamp information to frame data
@@ -274,9 +290,13 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             cv2.putText(vis_frame, f"Frame: {frame_number}/{total_frames}", (10, 60),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-            # Encode frame as JPEG and store
-            _, buffer = cv2.imencode('.jpg', vis_frame)
-            tracking_frames[task_id] = buffer.tobytes()
+            # Encode frame as JPEG and store (only every Nth frame for preview optimization)
+            # Always encode frame 0 to have immediate preview, then every Nth frame
+            if frame_number == 0 or frame_number % preview_skip_frames == 0:
+                # Use lower quality JPEG for faster encoding
+                encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+                _, buffer = cv2.imencode('.jpg', vis_frame, encode_params)
+                tracking_frames[task_id] = buffer.tobytes()
 
             # Update progress
             frame_number += 1
@@ -286,6 +306,11 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             })
 
         cap.release()
+
+        # Clean up GPU memory
+        if device == "cuda":
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
         # Save results
         results = {
@@ -408,8 +433,19 @@ async def download_results(task_id: str):
 @router.get("/frame/{task_id}")
 async def get_tracking_frame(task_id: str):
     """Get current tracking frame with visualization"""
+    # Check if task exists
+    if task_id not in tracking_tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # If frame is not yet available, return a waiting placeholder
     if task_id not in tracking_frames:
-        raise HTTPException(status_code=404, detail="No frame available for this task")
+        # Create a simple placeholder frame
+        placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(placeholder, "Waiting for first frame...",
+                   (120, 240),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+        _, buffer = cv2.imencode('.jpg', placeholder)
+        return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
 
     frame_bytes = tracking_frames[task_id]
     return StreamingResponse(io.BytesIO(frame_bytes), media_type="image/jpeg")

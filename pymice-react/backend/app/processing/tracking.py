@@ -2,6 +2,7 @@
 
 import cv2
 import numpy as np
+import torch
 from typing import Optional, List, Dict, Any
 from ultralytics import YOLO
 
@@ -148,6 +149,7 @@ def process_frame(
     confidence_threshold: float,
     iou_threshold: float,
     device: str,
+    inference_size: int = 640,
 ) -> Dict[str, Any]:
     """
     Process a single frame with YOLO detection and template matching fallback.
@@ -162,6 +164,7 @@ def process_frame(
         confidence_threshold: YOLO confidence threshold (0.0-1.0)
         iou_threshold: YOLO IOU threshold (0.0-1.0)
         device: Device to run inference on ('cuda', 'mps', or 'cpu')
+        inference_size: YOLO inference image size (default: 640, smaller = less GPU memory)
 
     Returns:
         Dictionary with frame data:
@@ -178,36 +181,43 @@ def process_frame(
 
     # Try YOLO detection first
     try:
-        results = model(
-            frame,
-            verbose=False,
-            conf=confidence_threshold,
-            iou=iou_threshold,
-            device=device,
-            imgsz=640,
-        )
+        # Use torch.no_grad() to prevent memory accumulation
+        with torch.no_grad():
+            results = model(
+                frame,
+                verbose=False,
+                conf=confidence_threshold,
+                iou=iou_threshold,
+                device=device,
+                imgsz=inference_size,
+                half=True if device == "cuda" else False,  # Use FP16 on CUDA to save memory
+            )
 
-        # Check if we got any detections with masks
-        if len(results) > 0 and results[0].masks is not None:
-            # Get the detection with highest confidence
-            masks = results[0].masks.data.cpu().numpy()
-            confidences = results[0].boxes.conf.cpu().numpy()
+            # Check if we got any detections with masks
+            if len(results) > 0 and results[0].masks is not None:
+                # Get the detection with highest confidence
+                masks = results[0].masks.data.cpu().numpy()
+                confidences = results[0].boxes.conf.cpu().numpy()
 
-            if len(confidences) > 0:
-                best_idx = np.argmax(confidences)
-                mask = masks[best_idx]
+                if len(confidences) > 0:
+                    best_idx = np.argmax(confidences)
+                    mask = masks[best_idx]
 
-                # Resize mask to frame size
-                mask_resized = cv2.resize(mask, (frame.shape[1], frame.shape[0]))
+                    # Resize mask to frame size
+                    mask_resized = cv2.resize(mask, (frame.shape[1], frame.shape[0]))
 
-                # Threshold mask to binary
-                binary_mask = (mask_resized > 0.5).astype(np.uint8) * 255
+                    # Threshold mask to binary
+                    binary_mask = (mask_resized > 0.5).astype(np.uint8) * 255
 
-                # Calculate centroid from mask
-                centroid = calculate_centroid(binary_mask)
+                    # Calculate centroid from mask
+                    centroid = calculate_centroid(binary_mask)
 
-                if centroid is not None:
-                    detection_method = "yolo"
+                    if centroid is not None:
+                        detection_method = "yolo"
+
+            # Clear GPU cache periodically to prevent memory buildup
+            if device == "cuda" and frame_number % 50 == 0:
+                torch.cuda.empty_cache()
 
     except Exception as e:
         print(f"YOLO detection failed for frame {frame_number}: {e}")

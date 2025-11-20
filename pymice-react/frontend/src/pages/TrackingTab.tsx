@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Play, Square, Download, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react'
+import { Play, Square, Download, CheckCircle, XCircle, Clock, AlertTriangle, ImageIcon, Loader2 } from 'lucide-react'
 import type { ROI, ROIType, VideoItem } from '@/types'
 import { drawROI } from '@/utils/canvas'
 import { videoApi, trackingApi } from '@/services/api'
@@ -19,12 +19,14 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
   const [progress, setProgress] = useState(0)
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.25)
   const [iouThreshold, setIouThreshold] = useState(0.45)
+  const [inferenceSize, setInferenceSize] = useState(640)
   const [taskId, setTaskId] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [trackingFrameUrl, setTrackingFrameUrl] = useState<string>('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const trackingIntervalRef = useRef<number | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null)
   const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([])
@@ -42,6 +44,10 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false)
   const [templateName, setTemplateName] = useState('')
   const [templateDescription, setTemplateDescription] = useState('')
+  const [previewError, setPreviewError] = useState(false)
+  const [serverPreviewUrl, setServerPreviewUrl] = useState<string>('')
+  const [isVideoLoading, setIsVideoLoading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   // Batch processing states
   const [videoFiles, setVideoFiles] = useState<VideoItem[]>([])
@@ -399,6 +405,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           rois: prepareROIs(),
           confidence_threshold: confidenceThreshold,
           iou_threshold: iouThreshold,
+          inference_size: inferenceSize,
         })
 
         if (!trackingResponse.data.success || !trackingResponse.data.data) {
@@ -488,17 +495,58 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     addLog('✓ Batch results downloaded successfully')
   }
 
-  const handleVideoFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
     const filesArray = Array.from(files)
 
     if (filesArray.length === 1) {
-      // Single file mode - use existing logic
-      setVideoFile(filesArray[0])
+      // Single file mode - automatically upload and generate server preview
+      const file = filesArray[0]
+      const fileSizeMB = file.size / (1024 * 1024)
+
+      setVideoFile(file)
       setVideoFiles([])
       setBatchResults([])
+      setPreviewError(false)
+      setServerPreviewUrl('')
+      setUploadedFilename('')
+      setTaskId(null)
+      setTrackingFrameUrl('')
+
+      // Automatically upload and generate server preview for all videos
+      addLog(`Uploading video: ${file.name} (${fileSizeMB.toFixed(1)}MB)...`)
+
+      // Start upload immediately
+      try {
+        setIsUploading(true)
+        setUploadProgress(0)
+
+        const uploadResponse = await videoApi.upload(file, (progress) => {
+          setUploadProgress(progress)
+        })
+
+        if (uploadResponse.data.success && uploadResponse.data.data) {
+          const filename = uploadResponse.data.data.filename
+          setUploadedFilename(filename)
+          addLog('✓ Video uploaded successfully')
+
+          // Get frame from server (middle frame for better preview)
+          addLog('Generating preview frame from middle of video...')
+          const response = await videoApi.getFrame(filename)
+          const url = URL.createObjectURL(response.data)
+          setServerPreviewUrl(url)
+          setPreviewError(false)
+          addLog('✓ Server preview generated (will be displayed via <img> element)')
+        }
+      } catch (error) {
+        console.error('Failed to upload video:', error)
+        addLog('✗ Failed to upload video: ' + (error as Error).message)
+      } finally {
+        setIsUploading(false)
+        setUploadProgress(0)
+      }
     } else {
       // Batch mode
       const videoItems: VideoItem[] = filesArray.map(file => ({
@@ -514,17 +562,118 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       setUploadedFilename('')
       setTaskId(null)
       setTrackingFrameUrl('')
+      setPreviewError(false)
+      setServerPreviewUrl('')
 
       addLog(`Added ${filesArray.length} videos for batch processing`)
+
+      // Automatically upload and generate preview for first video to help with ROI drawing
+      const firstFile = filesArray[0]
+      const fileSizeMB = firstFile.size / (1024 * 1024)
+      addLog(`Uploading first video for preview: ${firstFile.name} (${fileSizeMB.toFixed(1)}MB)...`)
+
+      try {
+        setIsUploading(true)
+        setUploadProgress(0)
+
+        const uploadResponse = await videoApi.upload(firstFile, (progress) => {
+          setUploadProgress(progress)
+        })
+
+        if (uploadResponse.data.success && uploadResponse.data.data) {
+          const filename = uploadResponse.data.data.filename
+          setUploadedFilename(filename)
+          addLog('✓ First video uploaded successfully')
+
+          // Get frame from server for preview
+          addLog('Generating preview frame...')
+          const response = await videoApi.getFrame(filename)
+          const url = URL.createObjectURL(response.data)
+          setServerPreviewUrl(url)
+          setPreviewError(false)
+          addLog('✓ Preview ready - you can now draw ROIs that will be applied to all videos')
+        }
+      } catch (error) {
+        console.error('Failed to upload first video:', error)
+        addLog('✗ Failed to upload first video: ' + (error as Error).message)
+      } finally {
+        setIsUploading(false)
+        setUploadProgress(0)
+      }
+    }
+  }
+
+  // Timeout ref to detect slow loading
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleVideoError = () => {
+    if (videoFile) {
+      console.error('Video failed to load natively')
+      setPreviewError(true)
+      setIsVideoLoading(false)
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+        loadingTimeoutRef.current = null
+      }
+      addLog('⚠️ Video codec not supported by browser. Auto-generating server preview...')
+      // Automatically generate server preview when native loading fails
+      handleGenerateServerPreview()
+    }
+  }
+
+  const handleGenerateServerPreview = async () => {
+    if (!videoFile) return
+
+    try {
+      setIsUploading(true)
+      setUploadProgress(0)
+      addLog('Uploading video for server preview...')
+
+      // Upload video first if needed
+      let filename = uploadedFilename
+      if (!filename) {
+        const uploadResponse = await videoApi.upload(videoFile, (progress) => {
+          setUploadProgress(progress)
+        })
+        if (uploadResponse.data.success && uploadResponse.data.data) {
+          filename = uploadResponse.data.data.filename
+          setUploadedFilename(filename)
+        } else {
+          throw new Error('Failed to upload video')
+        }
+      }
+
+      // Get frame from server (middle frame for better preview)
+      addLog('Generating preview frame from middle of video...')
+      const response = await videoApi.getFrame(filename)
+      const url = URL.createObjectURL(response.data)
+      setServerPreviewUrl(url)
+      setPreviewError(false)
+      setIsUploading(false)
+      setUploadProgress(0)
+      addLog('✓ Server preview generated (will be displayed via <img> element)')
+
+    } catch (error) {
+      console.error('Failed to generate server preview:', error)
+      addLog('✗ Failed to generate server preview: ' + (error as Error).message)
+      setIsUploading(false)
+      setUploadProgress(0)
     }
   }
 
   useEffect(() => {
     if (videoFile && videoRef.current) {
       const video = videoRef.current
+      setIsVideoLoading(true)
       video.src = URL.createObjectURL(videoFile)
 
       video.onloadedmetadata = () => {
+        // Clear timeout if metadata loads
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current)
+          loadingTimeoutRef.current = null
+        }
+
         // Set canvas size to match video aspect ratio
         const canvas = canvasRef.current
         if (canvas && video.videoWidth && video.videoHeight) {
@@ -546,21 +695,43 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
         // Seek to first frame and pause
         video.currentTime = 0
+        setPreviewError(false) // Reset error if metadata loads successfully
       }
+
+      // Set a timeout to auto-generate server preview if loading takes too long (> 5 seconds)
+      // This handles large files with moov atom at end, or unsupported codecs that don't fire error immediately
+      if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current)
+      loadingTimeoutRef.current = setTimeout(() => {
+        if (video.readyState < 1) {
+          console.warn('Video loading timed out, auto-generating server preview')
+          setIsVideoLoading(false)
+          addLog('⚠️ Video loading taking too long. Auto-generating server preview...')
+          handleGenerateServerPreview()
+        }
+      }, 5000)
 
       video.onseeked = () => {
         // Draw frame after seeking is complete
         video.pause()
         requestAnimationFrame(() => {
           drawFrame()
+          setIsVideoLoading(false)
         })
+      }
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current)
+        loadingTimeoutRef.current = null
       }
     }
   }, [videoFile])
 
   useEffect(() => {
     drawFrame()
-  }, [rois])
+  }, [rois, serverPreviewUrl])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -579,10 +750,26 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
   const drawFrame = () => {
     const canvas = canvasRef.current
     const video = videoRef.current
-    if (!canvas || !video) return
+    if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+
+    // Clear canvas (it's transparent, only ROIs will be drawn)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // If using server preview, just draw ROIs (image is shown by <img> element)
+    if (serverPreviewUrl) {
+      // Draw ROIs only
+      rois.forEach((roi, index) => {
+        const colors = ['#00ff00', '#ff00ff', '#00ffff', '#ffff00', '#ff8800']
+        drawROI(ctx, roi, colors[index % colors.length], 2, true, 0.1)
+      })
+      return
+    }
+
+    // For native video preview
+    if (!video) return
 
     canvas.width = video.videoWidth || 640
     canvas.height = video.videoHeight || 480
@@ -772,20 +959,26 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
     try {
       setIsUploading(true)
+      setUploadProgress(0)
 
       // Upload video if not already uploaded
       let filename = uploadedFilename
       if (!filename) {
-        const uploadResponse = await videoApi.upload(videoFile)
+        addLog('Uploading video...')
+        const uploadResponse = await videoApi.upload(videoFile, (progress) => {
+          setUploadProgress(progress)
+        })
         if (uploadResponse.data.success && uploadResponse.data.data) {
           filename = uploadResponse.data.data.filename
           setUploadedFilename(filename)
+          addLog('✓ Video uploaded successfully')
         } else {
           throw new Error('Failed to upload video')
         }
       }
 
       setIsUploading(false)
+      setUploadProgress(0)
       setIsTracking(true)
       setProgress(0)
 
@@ -826,6 +1019,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         },
         confidence_threshold: confidenceThreshold,
         iou_threshold: iouThreshold,
+        inference_size: inferenceSize,
       })
 
       if (trackingResponse.data.success && trackingResponse.data.data) {
@@ -877,6 +1071,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       addLog('✗ Failed to start tracking: ' + (error as Error).message)
       setIsTracking(false)
       setIsUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -1035,18 +1230,38 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         {/* Batch Video List */}
         {videoFiles.length > 0 && (
           <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">Batch Processing Queue</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-200">Batch Processing Queue</h3>
+              <div className="flex gap-3 text-xs">
+                <span className="text-gray-400">
+                  Total: <span className="text-white font-semibold">{videoFiles.length}</span>
+                </span>
+                <span className="text-green-400">
+                  Completed: <span className="font-semibold">{videoFiles.filter(v => v.status === 'completed').length}</span>
+                </span>
+                {videoFiles.filter(v => v.status === 'error').length > 0 && (
+                  <span className="text-red-400">
+                    Failed: <span className="font-semibold">{videoFiles.filter(v => v.status === 'error').length}</span>
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {videoFiles.map((video, index) => (
                 <div
                   key={index}
-                  className={`bg-gray-700 rounded-lg p-3 border ${
-                    currentVideoIndex === index
-                      ? 'border-primary-500'
-                      : 'border-gray-600'
-                  }`}
+                  className={`relative bg-gray-700 rounded-lg p-3 border transition-all ${currentVideoIndex === index
+                    ? 'border-primary-500 shadow-lg shadow-primary-500/20'
+                    : 'border-gray-600'
+                    }`}
                 >
+                  {/* Current Processing Indicator */}
+                  {currentVideoIndex === index && isTracking && (
+                    <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-12 bg-primary-500 rounded-r animate-pulse"></div>
+                  )}
+
                   <div className="flex items-center gap-3">
+
                     {/* Status Icon */}
                     <div className="flex-shrink-0">
                       {video.status === 'pending' && (
@@ -1082,11 +1297,10 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                         <div className="mt-2">
                           <div className="bg-gray-600 rounded-full h-2 overflow-hidden">
                             <div
-                              className={`h-full transition-all duration-300 ${
-                                video.status === 'uploading'
-                                  ? 'bg-blue-500'
-                                  : 'bg-primary-500'
-                              }`}
+                              className={`h-full transition-all duration-300 ${video.status === 'uploading'
+                                ? 'bg-blue-500'
+                                : 'bg-primary-500'
+                                }`}
                               style={{ width: `${video.progress}%` }}
                             />
                           </div>
@@ -1113,7 +1327,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         {/* YOLO Model Configuration */}
         <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
           <h3 className="text-sm font-semibold text-gray-200 mb-3">YOLO Model Configuration</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Confidence Threshold: {confidenceThreshold.toFixed(2)}
@@ -1149,6 +1363,24 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                 Intersection over Union threshold for NMS
               </p>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Inference Size: {inferenceSize}px
+              </label>
+              <input
+                type="range"
+                min="320"
+                max="1280"
+                step="160"
+                value={inferenceSize}
+                onChange={(e) => setInferenceSize(parseInt(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Image size for inference (smaller = less GPU memory)
+              </p>
+            </div>
           </div>
         </div>
 
@@ -1168,9 +1400,26 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               {isUploading
                 ? 'Uploading...'
                 : videoFiles.length > 0
-                ? `Start Batch Tracking (${videoFiles.length} videos)`
-                : 'Start Tracking'}
+                  ? `Start Batch Tracking (${videoFiles.length} videos)`
+                  : 'Start Tracking'}
             </button>
+          )}
+
+          {isUploading && !isTracking && (
+            <div className="flex-1">
+              <div className="text-sm text-gray-300 mb-2">
+                {videoFiles.length > 0
+                  ? `Uploading first video for preview...`
+                  : 'Uploading video...'}
+              </div>
+              <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div
+                  className="bg-blue-500 h-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <div className="text-sm text-gray-400 mt-1">{uploadProgress.toFixed(1)}% uploaded</div>
+            </div>
           )}
 
           {isTracking && videoFiles.length === 0 && (
@@ -1206,14 +1455,31 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               </button>
 
               <div className="flex-1">
-                <div className="text-sm text-gray-300 mb-2">
-                  Processing video {currentVideoIndex + 1} of {videoFiles.length}
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-sm text-gray-300">
+                    Processing video {currentVideoIndex + 1} of {videoFiles.length}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {videoFiles.filter(v => v.status === 'completed').length} completed • {videoFiles.filter(v => v.status === 'error').length} failed
+                  </div>
                 </div>
-                <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div
-                    className="bg-primary-500 h-full transition-all duration-300"
-                    style={{ width: `${((currentVideoIndex + 1) / videoFiles.length) * 100}%` }}
-                  />
+                <div className="space-y-2">
+                  {/* Overall batch progress */}
+                  <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-primary-500 h-full transition-all duration-300"
+                      style={{ width: `${((currentVideoIndex + 1) / videoFiles.length) * 100}%` }}
+                    />
+                  </div>
+                  {/* Current video progress */}
+                  {currentVideoIndex >= 0 && videoFiles[currentVideoIndex] && (
+                    <div className="bg-gray-700 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-400 h-full transition-all duration-300"
+                        style={{ width: `${videoFiles[currentVideoIndex].progress}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -1259,11 +1525,49 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
       {/* Video Canvas */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h3 className="text-lg font-semibold mb-4">
-          {isTracking ? 'Live Tracking Preview' : trackingFrameUrl ? 'Tracking Result' : 'Video Preview & ROI Drawing'}
-        </h3>
-        <div className="bg-black rounded-lg overflow-hidden border border-gray-700 relative flex items-center justify-center" style={{ minHeight: '400px' }}>
-          <video ref={videoRef} className="hidden" />
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">
+              {isTracking ? 'Live Tracking Preview' : trackingFrameUrl ? 'Tracking Result' : 'Video Preview & ROI Drawing'}
+            </h3>
+            {videoFiles.length > 0 && !isTracking && !trackingFrameUrl && (
+              <p className="text-xs text-yellow-400 mt-1">
+                📦 Batch Mode: Showing first video ({videoFiles[0]?.filename}). ROIs will be applied to all {videoFiles.length} videos.
+              </p>
+            )}
+            {isTracking && videoFiles.length > 0 && currentVideoIndex >= 0 && (
+              <p className="text-xs text-primary-400 mt-1">
+                🎬 Processing video {currentVideoIndex + 1}/{videoFiles.length}: {videoFiles[currentVideoIndex]?.filename}
+              </p>
+            )}
+          </div>
+          {!isTracking && !trackingFrameUrl && videoFile && !serverPreviewUrl && (
+            <button
+              onClick={handleGenerateServerPreview}
+              disabled={isUploading}
+              className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-gray-300 flex items-center gap-2 transition-colors border border-gray-600"
+              title="Use this if video preview is black or not working"
+            >
+              {isUploading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <ImageIcon className="w-3 h-3" />
+              )}
+              Use Server Preview
+            </button>
+          )}
+        </div>
+        <div
+          className="relative bg-black rounded-lg overflow-hidden shadow-lg min-h-[480px] flex items-center justify-center"
+          ref={containerRef}
+        >
+          <video
+            ref={videoRef}
+            className="hidden"
+            playsInline
+            muted
+            onError={handleVideoError}
+          />
 
           {/* Show tracking frame when tracking is active or when last frame is available */}
           {trackingFrameUrl && (
@@ -1272,19 +1576,114 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               alt="Tracking preview"
               className="max-w-full max-h-[600px] w-auto h-auto"
               style={{ objectFit: 'contain' }}
+              onError={(e) => {
+                // Suppress 404 errors in console during initial loading
+                // The placeholder frame from backend will be shown instead
+                console.debug('Waiting for tracking frame...')
+              }}
+              onLoad={() => {
+                console.debug('Tracking frame updated')
+              }}
             />
           )}
 
-          {/* Show canvas for ROI drawing when not tracking and no tracking frame */}
-          {!isTracking && !trackingFrameUrl && (
+          {/* Show server preview image when available */}
+          {!isTracking && !trackingFrameUrl && serverPreviewUrl && (
+            <div className="relative inline-block">
+              <img
+                src={serverPreviewUrl}
+                alt="Video preview"
+                className="max-w-full max-h-[600px]"
+                style={{ display: 'block', objectFit: 'contain' }}
+                onLoad={(e) => {
+                  const img = e.target as HTMLImageElement
+                  console.log(`Image element loaded and displayed: ${img.naturalWidth}x${img.naturalHeight}`)
+                  addLog(`✓ Preview image displayed (${img.naturalWidth}x${img.naturalHeight})`)
+                  // Set canvas size to match image
+                  const canvas = canvasRef.current
+                  if (canvas) {
+                    canvas.width = img.naturalWidth
+                    canvas.height = img.naturalHeight
+                    canvas.style.width = `${img.width}px`
+                    canvas.style.height = `${img.height}px`
+                    drawFrame()
+                  }
+                }}
+              />
+              {/* Overlay canvas for ROI drawing */}
+              <canvas
+                ref={canvasRef}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+                onMouseLeave={() => setIsDrawing(false)}
+                className="cursor-crosshair absolute top-0 left-0"
+                style={{
+                  pointerEvents: 'auto'
+                }}
+              />
+            </div>
+          )}
+
+          {/* Show canvas for native video when no server preview */}
+          {!isTracking && !trackingFrameUrl && !serverPreviewUrl && !previewError && (
             <canvas
               ref={canvasRef}
-              className="max-w-full cursor-crosshair"
               onMouseDown={handleCanvasMouseDown}
               onMouseMove={handleCanvasMouseMove}
               onMouseUp={handleCanvasMouseUp}
               onMouseLeave={() => setIsDrawing(false)}
+              className="cursor-crosshair max-w-full max-h-[600px]"
+              style={{ objectFit: 'contain' }}
             />
+          )}
+
+          {/* Loading Overlay */}
+          {isVideoLoading && (
+            <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center z-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mb-4"></div>
+              <p className="text-gray-300 font-medium">Loading video...</p>
+              <p className="text-gray-500 text-sm mt-2 mb-6">Large files may take a moment</p>
+
+              {/* Manual Override for stuck loading */}
+              <button
+                onClick={() => {
+                  setIsVideoLoading(false)
+                  setPreviewError(true)
+                }}
+                className="text-xs text-gray-400 hover:text-white underline transition-colors"
+              >
+                Taking too long? Use server preview
+              </button>
+            </div>
+          )}
+
+          {/* Error Overlay */}
+          {previewError && !serverPreviewUrl && (
+            <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center z-20 p-6 text-center">
+              <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-2">Video Preview Unavailable</h3>
+              <p className="text-gray-400 mb-6 max-w-md">
+                The browser cannot play this video format natively. You can generate a static preview from the server to draw ROIs.
+              </p>
+              <button
+                onClick={handleGenerateServerPreview}
+                disabled={isUploading}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="w-4 h-4" />
+                    Generate Server Preview
+                  </>
+                )}
+              </button>
+            </div>
           )}
 
           {!isTracking && !trackingFrameUrl && (
@@ -1333,20 +1732,22 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         </div>
       </div>
 
-      {/* Tracking Logs */}
-      {trackingLogs.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4">Tracking Log</h3>
-          <div className="bg-black rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto font-mono text-sm">
-            {trackingLogs.map((log, index) => (
+      {/* Tracking Logs - Always visible */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h3 className="text-lg font-semibold mb-4">Tracking Log</h3>
+        <div className="bg-black rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto font-mono text-sm">
+          {trackingLogs.length === 0 ? (
+            <div className="text-gray-500 italic">No logs yet. Upload a video to get started.</div>
+          ) : (
+            trackingLogs.map((log, index) => (
               <div key={index} className="text-gray-300 mb-1">
                 <span className="text-gray-500">[{log.time}]</span> {log.message}
               </div>
-            ))}
-            <div ref={logsEndRef} />
-          </div>
+            ))
+          )}
+          <div ref={logsEndRef} />
         </div>
-      )}
+      </div>
 
       {/* Save Template Modal */}
       {showSaveTemplateModal && (

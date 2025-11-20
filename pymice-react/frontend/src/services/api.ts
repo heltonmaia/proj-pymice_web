@@ -65,6 +65,9 @@ export const videoApi = {
 
   listVideos: () =>
     api.get<ApiResponse<string[]>>('/video/list'),
+
+  getFrame: (filename: string, frameNumber?: number) =>
+    api.get<Blob>(`/video/frame/${filename}${frameNumber !== undefined ? `?frame_number=${frameNumber}` : ''}`, { responseType: 'blob' }),
 }
 
 // Tracking API
@@ -86,6 +89,7 @@ export const trackingApi = {
     rois: ROIPreset
     confidence_threshold: number
     iou_threshold: number
+    inference_size?: number
   }) =>
     api.post<ApiResponse<{ task_id: string }>>('/tracking/start', params),
 

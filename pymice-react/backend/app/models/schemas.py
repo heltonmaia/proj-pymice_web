@@ -90,13 +90,14 @@ class TrackingRequest(BaseModel):
     rois: ROIPreset
     confidence_threshold: float = Field(ge=0.0, le=1.0)
     iou_threshold: float = Field(ge=0.0, le=1.0)
+    inference_size: int = Field(default=640, ge=320, le=1280)  # YOLO inference image size (smaller = less GPU memory)
 
 
 class ProcessingProgress(BaseModel):
     current_frame: int
     total_frames: int
     percentage: float
-    status: Literal["processing", "completed", "error"]
+    status: Literal["processing", "completed", "error", "stopped"]
     device: Optional[str] = None
 
 

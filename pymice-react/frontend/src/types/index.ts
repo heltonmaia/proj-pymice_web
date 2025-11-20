@@ -88,6 +88,7 @@ export interface DetectionSettings {
   model_path: string;
   confidence_threshold: number;
   iou_threshold: number;
+  inference_size?: number; // YOLO inference image size (320-1280, default: 640)
 }
 
 // Analysis Settings
@@ -118,7 +119,7 @@ export interface ProcessingProgress {
   current_frame: number;
   total_frames: number;
   percentage: number;
-  status: 'processing' | 'completed' | 'error';
+  status: 'processing' | 'completed' | 'error' | 'stopped';
   error?: string;
   device?: string;
 }

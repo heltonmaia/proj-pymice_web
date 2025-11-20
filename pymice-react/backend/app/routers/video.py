@@ -1,16 +1,51 @@
 """Video management API endpoints"""
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import os
 import shutil
 import cv2
+import io
 
 from app.models.schemas import ApiResponse, VideoInfo, UploadResponse
 
 router = APIRouter()
 
 VIDEO_DIR = "temp/videos"
+
+
+@router.get("/frame/{filename}")
+async def get_video_frame(filename: str, frame_number: int = None):
+    """Get a specific frame from a video. If frame_number is None, gets the middle frame."""
+    filepath = os.path.join(VIDEO_DIR, filename)
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    try:
+        cap = cv2.VideoCapture(filepath)
+
+        # If no frame number specified, get the middle frame
+        if frame_number is None:
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            frame_number = total_frames // 2
+            print(f"Getting middle frame {frame_number} out of {total_frames} total frames")
+
+        # Seek to frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret:
+            raise HTTPException(status_code=400, detail="Could not read frame")
+
+        # Encode as JPEG
+        _, buffer = cv2.imencode('.jpg', frame)
+
+        return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/upload")

@@ -1,180 +1,162 @@
 @echo off
-setlocal enabledelayedexpansion
+rem ============================================================
+rem .bat developed by Marcos Aurelio for PyMiceTracking
+rem ============================================================
 
-rem ==========================
-rem CONFIG
-rem ==========================
+setlocal enabledelayedexpansion 
+
+rem ============================================================
+rem WEB APPLICATION PORTS and DIRS
+rem ============================================================
 set BACKEND_PORT=8000
+set BACKEND_DIR=%~dp0backend
 set FRONTEND_PORT=5173
-set LOG_DIR=logs
+set FRONTEND_DIR=%~dp0frontend
+set LOGS_DIR=%~dp0logs
+rem ============================================================
 
 
-rem ==========================
-rem MAIN ENTRYPOINT
-rem ==========================
+rem ============================================================
+rem COMMANDS and GO TO
+rem ============================================================
 if "%1"=="" goto menu
-
-if "%1"=="start"   goto start
-if "%1"=="stop"    goto stop
+if "%1"=="start" goto start
+if "%1"=="stop" goto stop
 if "%1"=="restart" goto restart
-if "%1"=="status"  goto status
-if "%1"=="logs"    goto logs
-
-echo Comando invalido.
+if "%1"=="status" goto status
+if "%1"=="frontlogs" goto frontlogs
+if "%1"=="backlogs" goto backlogs
+echo Invalid command...Try again...
 exit /b
+rem ============================================================
 
+echo %LOGS_DIR%
+echo %FRONTEND_DIR%
+echo %BACKEND_DIR%
 
-rem ==========================
-rem CHECK PORT
-rem ==========================
-:check_port
-set PORT_PID=
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%1 ^| findstr LISTENING') do (
-    set PORT_PID=%%a
-)
-exit /b
+rem ============================================================
+rem MAIN MENU
+rem ============================================================
+:menu
+echo ====================================================================================================
+echo x PyMiceTracking Web Application - Developed by Helton Maia, Marcos Aurelio and Richardson Menezes x
+echo ====================================================================================================
 
+echo Options available:
+echo 1 - Start services
+echo 2 - Stop services
+echo 3 - Restart services
+echo 4 - Check status
+echo 5 - Check backend logs
+echo 6 - Check frontend logs
+echo 0 - Exit
 
-rem ==========================
-rem STATUS
-rem ==========================
-:status
-cls
-echo ========= STATUS =========
+set /p CHOICE=Choose a function: 
+if "%CHOICE%"=="1" goto start
+if "%CHOICE%"=="2" goto stop 
+if "%CHOICE%"=="3" goto restart
+if "%CHOICE%"=="4" goto status
+if "%CHOICE%"=="5" goto backlogs
+if "%CHOICE%"=="6" goto frontlogs
+if "%CHOICE%"=="0" exit /b
 
-call :check_port %BACKEND_PORT%
-if defined PORT_PID (
-    echo Backend: RUNNING (PID %PORT_PID%)
-) else (
-    echo Backend: STOPPED
-)
-
-call :check_port %FRONTEND_PORT%
-if defined PORT_PID (
-    echo Frontend: RUNNING (PID %PORT_PID%)
-) else (
-    echo Frontend: STOPPED
-)
-
-echo ==========================
-echo.
+echo %CHOICE
 pause
 exit /b
-
-
-rem ==========================
+rem ============================================================
 rem START
-rem ==========================
+rem ============================================================
 :start
-cls
-echo Iniciando...
+echo Starting the system.....
 
-if not exist %LOG_DIR% mkdir %LOG_DIR%
+cd /d "proj-pymicetracking-panel/pymice-react/backend"
+start "backend" cmd /c "uv-venv\Scripts\activate.bat && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+timeout /t 2 >nul
 
-rem --- backend ---
-call :check_port %BACKEND_PORT%
-if not defined PORT_PID (
-    echo Iniciando Backend...
-    pushd backend
-    call ..\uv-env\Scripts\activate.bat
-    start "" /b cmd /c "uvicorn app.main:app --host 0.0.0.0 --port %BACKEND_PORT% --reload > ..\%LOG_DIR%\backend.log 2>&1"
-    popd
-) else (
-    echo Backend ja esta rodando.
-)
+cd /d "../../../"
+for /f "tokens=2" %%a in ('tasklist ^| findstr /i "uvicorn"') do set BACKEND_PID=%%a
+echo %BACKEND_PID% > backend.pid
+echo Backend started..... PID=%BACKEND_PID%
 
-rem --- frontend ---
-call :check_port %FRONTEND_PORT%
-if not defined PORT_PID (
-    echo Iniciando Frontend...
-    pushd frontend
-    if not exist node_modules call npm install --silent
-    start "" /b cmd /c "npm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT% > ..\%LOG_DIR%\frontend.log 2>&1"
-    popd
-) else (
-    echo Frontend ja esta rodando.
-)
 
-echo.
-pause
+cd /d "proj-pymicetracking-panel/pymice-react/frontend"
+start "frontend" cmd /c npm run dev
+timeout /t 2 >nul
+
+cd /d "../../../"
+for /f "tokens=2" %%a in ('tasklist ^| findstr /i "node"') do set FRONTEND_PID=%%a
+echo %FRONTEND_PID% > frontend.pid
+echo Frontend started..... PID=%FRONTEND_PID%
+
+
+echo ==== System started ====
 exit /b
 
 
-rem ==========================
+rem ============================================================
 rem STOP
-rem ==========================
+rem ============================================================
 :stop
-cls
-echo Parando...
+echo Stopping the system.....
 
-call :check_port %BACKEND_PORT%
-if defined PORT_PID (
-    taskkill /PID %PORT_PID% /F >nul
-    echo Backend parado.
+if exist backend.pid (
+    for /f %%p in (backend.pid) do taskkill /PID %%p /F
+    del backend.pid
 )
 
-call :check_port %FRONTEND_PORT%
-if defined PORT_PID (
-    taskkill /PID %PORT_PID% /F >nul
-    echo Frontend parado.
+if exist frontend.pid (
+    for /f %%p in (frontend.pid) do taskkill /PID %%p /F
+    del frontend.pid
 )
 
-echo.
-pause
+echo ==== System stopped ====
 exit /b
+rem ============================================================
 
-
-rem ==========================
+rem ============================================================
 rem RESTART
-rem ==========================
+rem ============================================================
 :restart
+echo Restarting the system.....
 call :stop
 call :start
 exit /b
+rem ============================================================
 
+rem ============================================================
+rem STATUS
+rem ============================================================
+:status
+echo ==== Application status ====
 
-rem ==========================
-rem LOGS
-rem ==========================
-:logs
-if "%2"=="backend" (
-    notepad %LOG_DIR%\backend.log
-    exit /b
-)
-if "%2"=="frontend" (
-    notepad %LOG_DIR%\frontend.log
-    exit /b
-)
-echo Uso: run.bat logs backend|frontend
-pause
+netstat -ano | findstr :%BACKEND_PORT% >nul
+    if %errorlevel% equ 0 (
+    echo Backend running in port: %BACKEND_PORT%
+    ) else (
+    echo Backend not running
+    )
+
+netstat -ano | findstr :%FRONTEND_PORT% >nul
+    if %errorlevel% equ 0 (
+    echo Frontend running in port: %FRONTEND_PORT%
+    ) else (
+    echo Frontend not running
+    )
 exit /b
+rem ============================================================
 
+rem ============================================================
+rem BACKLOGS
+rem ============================================================
+:backlogs
+echo backlogs
+exit /b
+rem ============================================================
 
-rem ==========================
-rem MENU
-rem ==========================
-:menu
-cls
-echo =====================================
-echo        PyMiceTracking WEB (Windows)
-echo =====================================
-echo.
-echo 1 - Start Services
-echo 2 - Stop Services
-echo 3 - Restart Services
-echo 4 - Status
-echo 5 - Logs Backend
-echo 6 - Logs Frontend
-echo 0 - Exit
-echo.
-set /p op="Escolha: "
-
-if "%op%"=="1" goto start
-if "%op%"=="2" goto stop
-if "%op%"=="3" goto restart
-if "%op%"=="4" goto status
-if "%op%"=="5" goto logs backend
-if "%op%"=="6" goto logs frontend
-if "%op%"=="0" exit /b
-
-goto menu
+rem ============================================================
+rem FRONTLOGS
+rem ============================================================
+:frontlogs
+echo frontlogs
+exit /b
+rem ============================================================

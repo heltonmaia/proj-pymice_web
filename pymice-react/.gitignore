@@ -34,6 +34,7 @@ experiments/
 
 # Logs
 *.log
+*.pid
 
 # Local configuration
 .env

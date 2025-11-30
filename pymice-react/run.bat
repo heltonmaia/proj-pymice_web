@@ -69,21 +69,21 @@ rem ============================================================
 :start
 echo Starting the system.....
 
-cd /d "proj-pymicetracking-panel/pymice-react/backend"
+cd /d "backend"
 start "backend" cmd /c "uv-venv\Scripts\activate.bat && uvicorn app.main:app --host 0.0.0.0 --port 8000"
 timeout /t 2 >nul
 
-cd /d "../../../"
+cd /d "../"
 for /f "tokens=2" %%a in ('tasklist ^| findstr /i "uvicorn"') do set BACKEND_PID=%%a
 echo %BACKEND_PID% > backend.pid
 echo Backend started..... PID=%BACKEND_PID%
 
 
-cd /d "proj-pymicetracking-panel/pymice-react/frontend"
+cd /d "frontend"
 start "frontend" cmd /c npm run dev
 timeout /t 2 >nul
 
-cd /d "../../../"
+cd /d "../"
 for /f "tokens=2" %%a in ('tasklist ^| findstr /i "node"') do set FRONTEND_PID=%%a
 echo %FRONTEND_PID% > frontend.pid
 echo Frontend started..... PID=%FRONTEND_PID%

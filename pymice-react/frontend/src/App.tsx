@@ -1,21 +1,19 @@
 import { useState } from 'react'
-import { Camera, Target, BarChart3, Wrench, Beaker, Globe } from 'lucide-react'
+import { Camera, Target, BarChart3, Wrench, Globe } from 'lucide-react'
 import MouseIcon from './components/MouseIcon'
 import AnimatedMouse from './components/AnimatedMouse'
 import CameraTab from './pages/CameraTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
 import ExtraToolsTab from './pages/ExtraToolsTab'
-import SyntheticTab from './pages/SyntheticTab'
 import IRLTab from './pages/IRLTab'
 
 const tabs = [
   { id: 'camera', label: 'Camera', icon: Camera, component: CameraTab },
   { id: 'tracking', label: 'Tracking', icon: Target, component: TrackingTab },
   { id: 'ethological', label: 'Ethological Analysis', icon: BarChart3, component: EthologicalTab },
-  { id: 'extra', label: 'Extra Tools', icon: Wrench, component: ExtraToolsTab },
-  { id: 'synthetic', label: 'Synthetic Data', icon: Beaker, component: SyntheticTab },
   { id: 'irl', label: 'IRL Analysis', icon: Globe, component: IRLTab },
+  { id: 'extra', label: 'Extra Tools', icon: Wrench, component: ExtraToolsTab },
 ]
 
 function App() {

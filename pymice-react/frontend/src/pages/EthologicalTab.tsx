@@ -21,11 +21,26 @@ export default function EthologicalTab(_props: EthologicalTabProps = {}) {
   })
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
   const [showBehavioralSettings, setShowBehavioralSettings] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [analysisLogs, setAnalysisLogs] = useState<Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>>([])
   const logsEndRef = useRef<HTMLDivElement>(null)
+
+  // Behavioral Analysis States
+  const [selectedBehavioralTest, setSelectedBehavioralTest] = useState<'open_field' | 'elevated_plus_maze' | null>(null)
+  const [openFieldAnalyses, setOpenFieldAnalyses] = useState({
+    rearing: false,
+    edgeJumps: false,
+    resting: false,
+    grooming: false,
+  })
+  const [elevatedPlusMazeAnalyses, setElevatedPlusMazeAnalyses] = useState({
+    suddenRun: false,
+    panoramicView: false,
+    headDips: false,
+    grooming: false,
+  })
 
   const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
     const time = new Date().toLocaleTimeString()
@@ -350,11 +365,159 @@ export default function EthologicalTab(_props: EthologicalTabProps = {}) {
           </div>
 
           {showBehavioralSettings && (
-            <>
-              <div className="mt-6 text-center text-gray-400 py-8">
-                <p className="text-sm">Behavioral analysis features will be added here</p>
+            <div className="mt-6 space-y-6">
+              {/* Test Selection */}
+              <div>
+                <h4 className="font-medium text-gray-300 mb-3">Select Behavioral Test</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Open Field */}
+                  <button
+                    onClick={() => setSelectedBehavioralTest(selectedBehavioralTest === 'open_field' ? null : 'open_field')}
+                    className={`p-4 rounded-lg border-2 transition-all text-left ${
+                      selectedBehavioralTest === 'open_field'
+                        ? 'border-primary-500 bg-primary-500/10'
+                        : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+                    }`}
+                  >
+                    <h5 className="font-semibold text-white mb-1">OPEN FIELD (Round)</h5>
+                    <p className="text-sm text-gray-400">Circular arena behavior analysis</p>
+                  </button>
+
+                  {/* Elevated Plus Maze */}
+                  <button
+                    onClick={() => setSelectedBehavioralTest(selectedBehavioralTest === 'elevated_plus_maze' ? null : 'elevated_plus_maze')}
+                    className={`p-4 rounded-lg border-2 transition-all text-left ${
+                      selectedBehavioralTest === 'elevated_plus_maze'
+                        ? 'border-primary-500 bg-primary-500/10'
+                        : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+                    }`}
+                  >
+                    <h5 className="font-semibold text-white mb-1">ELEVATED PLUS MAZE</h5>
+                    <p className="text-sm text-gray-400">Anxiety and exploration test</p>
+                  </button>
+                </div>
               </div>
-            </>
+
+              {/* Open Field Analyses */}
+              {selectedBehavioralTest === 'open_field' && (
+                <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
+                  <h4 className="font-medium text-gray-300 mb-3">Open Field Analyses</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={openFieldAnalyses.rearing}
+                        onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, rearing: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Rearing</span>
+                        <p className="text-xs text-gray-400">Detect vertical exploration behavior</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={openFieldAnalyses.edgeJumps}
+                        onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, edgeJumps: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Edge Jumps</span>
+                        <p className="text-xs text-gray-400">Track jumping attempts at arena borders</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={openFieldAnalyses.resting}
+                        onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, resting: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Resting</span>
+                        <p className="text-xs text-gray-400">Identify stationary/resting periods</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={openFieldAnalyses.grooming}
+                        onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, grooming: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Grooming</span>
+                        <p className="text-xs text-gray-400">Detect self-grooming behavior</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Elevated Plus Maze Content */}
+              {selectedBehavioralTest === 'elevated_plus_maze' && (
+                <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
+                  <h4 className="font-medium text-gray-300 mb-3">Elevated Plus Maze Analyses</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={elevatedPlusMazeAnalyses.suddenRun}
+                        onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, suddenRun: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Sudden Run</span>
+                        <p className="text-xs text-gray-400">Detect sudden rapid movements</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={elevatedPlusMazeAnalyses.panoramicView}
+                        onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, panoramicView: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Panoramic View</span>
+                        <p className="text-xs text-gray-400">Track head scanning and environment observation</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={elevatedPlusMazeAnalyses.headDips}
+                        onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, headDips: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Head Dips</span>
+                        <p className="text-xs text-gray-400">Identify head dipping over edges</p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={elevatedPlusMazeAnalyses.grooming}
+                        onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, grooming: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                      />
+                      <div>
+                        <span className="text-white font-medium">Grooming</span>
+                        <p className="text-xs text-gray-400">Detect self-grooming behavior</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

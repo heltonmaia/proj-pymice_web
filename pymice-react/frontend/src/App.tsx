@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Camera, Target, BarChart3, Wrench, Globe } from 'lucide-react'
+import { Camera, Target, BarChart3, Wrench, Globe, Eye } from 'lucide-react'
 import MouseIcon from './components/MouseIcon'
 import AnimatedMouse from './components/AnimatedMouse'
 import CameraTab from './pages/CameraTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
+import VisualizarResultadosTab from './pages/VisualizarResultadosTab'
 import ExtraToolsTab from './pages/ExtraToolsTab'
 import IRLTab from './pages/IRLTab'
 
@@ -13,12 +14,13 @@ const tabs = [
   { id: 'tracking', label: 'Tracking', icon: Target, component: TrackingTab },
   { id: 'ethological', label: 'Ethological Analysis', icon: BarChart3, component: EthologicalTab },
   { id: 'irl', label: 'IRL Analysis', icon: Globe, component: IRLTab },
+  { id: 'visualizar', label: 'View Results', icon: Eye, component: VisualizarResultadosTab },
   { id: 'extra', label: 'Extra Tools', icon: Wrench, component: ExtraToolsTab },
 ]
 
 function App() {
   const [activeTab, setActiveTab] = useState('camera')
-  const [isTrackingActive, setIsTrackingActive] = useState(false)
+  const [isTabLocked, setIsTabLocked] = useState(false)
 
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || CameraTab
 
@@ -52,7 +54,7 @@ function App() {
             {tabs.map((tab) => {
               const Icon = tab.icon
               const isCurrentTab = activeTab === tab.id
-              const isDisabled = isTrackingActive && !isCurrentTab
+              const isDisabled = isTabLocked && !isCurrentTab
 
               return (
                 <button
@@ -80,7 +82,7 @@ function App() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
-        <ActiveComponent onTrackingStateChange={setIsTrackingActive} />
+        <ActiveComponent onTrackingStateChange={setIsTabLocked} />
       </main>
 
       {/* Footer */}

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, BarChart3, Download, ImageIcon, ChevronDown, ChevronUp } from 'lucide-react'
 import type { TrackingData, HeatmapSettings } from '@/types'
 import { analysisApi } from '@/services/api'
@@ -7,7 +7,7 @@ interface EthologicalTabProps {
   onTrackingStateChange?: (isTracking: boolean) => void
 }
 
-export default function EthologicalTab(_props: EthologicalTabProps = {}) {
+export default function EthologicalTab({ onTrackingStateChange }: EthologicalTabProps = {}) {
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null)
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [heatmapSettings, setHeatmapSettings] = useState<HeatmapSettings>({
@@ -41,6 +41,11 @@ export default function EthologicalTab(_props: EthologicalTabProps = {}) {
     headDips: false,
     grooming: false,
   })
+
+  // Lock tab when analyzing
+  useEffect(() => {
+    onTrackingStateChange?.(isAnalyzing)
+  }, [isAnalyzing, onTrackingStateChange])
 
   const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
     const time = new Date().toLocaleTimeString()
@@ -412,46 +417,49 @@ export default function EthologicalTab(_props: EthologicalTabProps = {}) {
                       />
                       <div>
                         <span className="text-white font-medium">Rearing</span>
-                        <p className="text-xs text-gray-400">Detect vertical exploration behavior</p>
+                        <p className="text-xs text-gray-400">Implementation of 3 ROIs (central area, lower edge, upper edge) quantifying when the animal's body partially crosses the lower edge</p>
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={openFieldAnalyses.edgeJumps}
                         onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, edgeJumps: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Edge Jumps</span>
-                        <p className="text-xs text-gray-400">Track jumping attempts at arena borders</p>
+                        <span className="text-gray-400 font-medium">Edge Jumps</span>
+                        <p className="text-xs text-gray-500">Track jumping attempts at arena borders (Coming soon)</p>
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={openFieldAnalyses.resting}
                         onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, resting: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Resting</span>
-                        <p className="text-xs text-gray-400">Identify stationary/resting periods</p>
+                        <span className="text-gray-400 font-medium">Resting</span>
+                        <p className="text-xs text-gray-500">Identify stationary/resting periods (Coming soon)</p>
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={openFieldAnalyses.grooming}
                         onChange={(e) => setOpenFieldAnalyses({ ...openFieldAnalyses, grooming: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Grooming</span>
-                        <p className="text-xs text-gray-400">Detect self-grooming behavior</p>
+                        <span className="text-gray-400 font-medium">Grooming</span>
+                        <p className="text-xs text-gray-500">Detect self-grooming behavior (Coming soon)</p>
                       </div>
                     </label>
                   </div>
@@ -463,55 +471,59 @@ export default function EthologicalTab(_props: EthologicalTabProps = {}) {
                 <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
                   <h4 className="font-medium text-gray-300 mb-3">Elevated Plus Maze Analyses</h4>
                   <div className="space-y-3">
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={elevatedPlusMazeAnalyses.suddenRun}
                         onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, suddenRun: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Sudden Run</span>
-                        <p className="text-xs text-gray-400">Detect sudden rapid movements</p>
+                        <span className="text-gray-400 font-medium">Sudden Run</span>
+                        <p className="text-xs text-gray-500">Detect sudden rapid movements (Coming soon)</p>
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={elevatedPlusMazeAnalyses.panoramicView}
                         onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, panoramicView: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Panoramic View</span>
-                        <p className="text-xs text-gray-400">Track head scanning and environment observation</p>
+                        <span className="text-gray-400 font-medium">Panoramic View</span>
+                        <p className="text-xs text-gray-500">Track head scanning and environment observation (Coming soon)</p>
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={elevatedPlusMazeAnalyses.headDips}
                         onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, headDips: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Head Dips</span>
-                        <p className="text-xs text-gray-400">Identify head dipping over edges</p>
+                        <span className="text-gray-400 font-medium">Head Dips</span>
+                        <p className="text-xs text-gray-500">Identify head dipping over edges (Coming soon)</p>
                       </div>
                     </label>
 
-                    <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
+                    <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
                         type="checkbox"
                         checked={elevatedPlusMazeAnalyses.grooming}
                         onChange={(e) => setElevatedPlusMazeAnalyses({ ...elevatedPlusMazeAnalyses, grooming: e.target.checked })}
+                        disabled
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-white font-medium">Grooming</span>
-                        <p className="text-xs text-gray-400">Detect self-grooming behavior</p>
+                        <span className="text-gray-400 font-medium">Grooming</span>
+                        <p className="text-xs text-gray-500">Detect self-grooming behavior (Coming soon)</p>
                       </div>
                     </label>
                   </div>

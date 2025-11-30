@@ -6,7 +6,7 @@ interface CameraTabProps {
   onTrackingStateChange?: (isTracking: boolean) => void
 }
 
-export default function CameraTab(_props: CameraTabProps = {}) {
+export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}) {
   const [devices, setDevices] = useState<number[]>([])
   const [selectedDevice, setSelectedDevice] = useState<number>(0)
   const [isStreaming, setIsStreaming] = useState(false)
@@ -24,6 +24,11 @@ export default function CameraTab(_props: CameraTabProps = {}) {
       }
     }
   }, [])
+
+  // Lock tab when recording
+  useEffect(() => {
+    onTrackingStateChange?.(isRecording)
+  }, [isRecording, onTrackingStateChange])
 
   const loadDevices = async () => {
     try {

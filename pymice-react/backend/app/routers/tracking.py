@@ -244,6 +244,7 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
                 iou_threshold=request.iou_threshold,
                 device=device,
                 inference_size=request.inference_size,
+                model_name=request.model_name,
             )
 
             # Add timestamp information to frame data
@@ -271,6 +272,39 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             if frame_data["centroid_x"] is not None and frame_data["centroid_y"] is not None:
                 cx = int(frame_data["centroid_x"])
                 cy = int(frame_data["centroid_y"])
+
+                # Draw segmentation mask if available
+                if "mask" in frame_data and frame_data["mask"]:
+                    mask_points = np.array(frame_data["mask"], dtype=np.int32)
+                    # Draw filled polygon with transparency
+                    overlay = vis_frame.copy()
+                    cv2.fillPoly(overlay, [mask_points], (0, 255, 255))  # Cyan color
+                    cv2.addWeighted(overlay, 0.3, vis_frame, 0.7, 0, vis_frame)
+                    # Draw contour
+                    cv2.polylines(vis_frame, [mask_points], True, (0, 255, 255), 2)
+
+                # Draw pose keypoints if available
+                if "keypoints" in frame_data and frame_data["keypoints"]:
+                    for i, kpt in enumerate(frame_data["keypoints"]):
+                        kx, ky = int(kpt["x"]), int(kpt["y"])
+                        conf = kpt["conf"]
+
+                        # Color based on confidence (green = high, yellow = medium, red = low)
+                        if conf > 0.7:
+                            color = (0, 255, 0)  # Green
+                        elif conf > 0.5:
+                            color = (0, 255, 255)  # Yellow
+                        else:
+                            color = (0, 165, 255)  # Orange
+
+                        # Draw keypoint
+                        cv2.circle(vis_frame, (kx, ky), 5, color, -1)
+                        cv2.circle(vis_frame, (kx, ky), 7, (255, 255, 255), 1)
+
+                        # Draw keypoint index
+                        cv2.putText(vis_frame, str(i), (kx + 10, ky),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
                 # Draw centroid as circle (red with white border)
                 cv2.circle(vis_frame, (cx, cy), 10, (0, 0, 255), -1)
                 cv2.circle(vis_frame, (cx, cy), 15, (255, 255, 255), 2)

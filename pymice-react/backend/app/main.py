@@ -17,11 +17,7 @@ app = FastAPI(
 
 def cleanup_temp_directories():
     """Clean all temporary directories on startup"""
-    # Files to preserve (not delete during cleanup)
-    PRESERVE_FILES = {
-        "temp/models/yolo_model.pt",  # YOLO model weights
-    }
-
+    # Directories to clean (but models directory will preserve .pt files)
     temp_dirs = [
         "temp/videos",
         "temp/tracking",
@@ -50,9 +46,9 @@ def cleanup_temp_directories():
             for item in items:
                 item_path = os.path.join(temp_dir, item)
 
-                # Skip preserved files
-                if item_path in PRESERVE_FILES:
-                    print(f"   📌 Preserved: {item}")
+                # NEVER delete .pt model files from temp/models
+                if temp_dir == "temp/models" and item.endswith('.pt'):
+                    print(f"   📌 Preserved model: {item}")
                     continue
 
                 try:

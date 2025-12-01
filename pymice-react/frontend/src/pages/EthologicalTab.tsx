@@ -464,6 +464,70 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   canvas.height = video.videoHeight
                   ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
+                  // Draw mask if segmentation
+                  if (rearingAnalysisType === 'segmentation' && frame.mask && frame.mask.length > 0) {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)' // Green transparent
+                    ctx.strokeStyle = '#00ff00'
+                    ctx.lineWidth = 2
+                    ctx.beginPath()
+                    ctx.moveTo(frame.mask[0][0], frame.mask[0][1])
+                    for (let j = 1; j < frame.mask.length; j++) {
+                      ctx.lineTo(frame.mask[j][0], frame.mask[j][1])
+                    }
+                    ctx.closePath()
+                    ctx.fill()
+                    ctx.stroke()
+                  }
+
+                  // Draw keypoints if pose
+                  if (rearingAnalysisType === 'pose' && frame.keypoints && frame.keypoints.length > 0) {
+                    // Define skeleton connections for typical animal pose models
+                    const connections = [
+                      [0, 1], [0, 2], [1, 3], [2, 4], // Head connections
+                      [0, 5], [5, 7], [7, 9],         // Left side
+                      [0, 6], [6, 8], [8, 10],        // Right side
+                      [5, 6], [5, 11], [6, 12],       // Body
+                      [11, 12], [11, 13], [12, 14]    // Rear
+                    ]
+
+                    // Draw skeleton lines
+                    ctx.strokeStyle = 'rgba(255, 255, 0, 0.7)'
+                    ctx.lineWidth = 2
+                    connections.forEach(([idx1, idx2]) => {
+                      const kp1 = frame.keypoints[idx1]
+                      const kp2 = frame.keypoints[idx2]
+                      if (kp1 && kp2 && kp1.conf > 0.3 && kp2.conf > 0.3) {
+                        ctx.beginPath()
+                        ctx.moveTo(kp1.x, kp1.y)
+                        ctx.lineTo(kp2.x, kp2.y)
+                        ctx.stroke()
+                      }
+                    })
+
+                    // Draw keypoints
+                    frame.keypoints.forEach((kp, idx) => {
+                      if (kp && kp.conf > 0.3) {
+                        // Color based on confidence
+                        const alpha = kp.conf
+                        ctx.fillStyle = `rgba(255, 0, 0, ${alpha})`
+                        ctx.strokeStyle = '#ffffff'
+                        ctx.lineWidth = 1
+
+                        ctx.beginPath()
+                        ctx.arc(kp.x, kp.y, 4, 0, 2 * Math.PI)
+                        ctx.fill()
+                        ctx.stroke()
+
+                        // Draw keypoint index for debugging (optional - can be removed)
+                        if (kp.conf > 0.7) {
+                          ctx.fillStyle = '#ffffff'
+                          ctx.font = '10px monospace'
+                          ctx.fillText(idx.toString(), kp.x + 6, kp.y - 6)
+                        }
+                      }
+                    })
+                  }
+
                   // Draw all ROIs
                   rearingROIs.forEach(roi => {
                     // Set color and style based on ROI and detection state

@@ -49,8 +49,8 @@ class ROIPreset(BaseModel):
 # Tracking Models
 class TrackingFrame(BaseModel):
     frame_number: int
-    centroid_x: float
-    centroid_y: float
+    centroid_x: Optional[float] = None
+    centroid_y: Optional[float] = None
     roi: Optional[str] = None
     roi_index: Optional[int] = None
     detection_method: Literal["yolo", "template", "none"]

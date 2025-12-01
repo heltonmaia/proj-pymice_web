@@ -20,11 +20,13 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
   const [showROIs, setShowROIs] = useState(true)
   const [showTrajectory, setShowTrajectory] = useState(true)
   const [showCentroid, setShowCentroid] = useState(true)
+  const [showRearingROIs, setShowRearingROIs] = useState(true)
 
   // Available features in loaded JSON
   const [hasKeypoints, setHasKeypoints] = useState(false)
   const [hasMask, setHasMask] = useState(false)
   const [hasROIs, setHasROIs] = useState(false)
+  const [hasRearingAnalysis, setHasRearingAnalysis] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -75,6 +77,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
         setHasKeypoints(!!firstFrame?.keypoints && firstFrame.keypoints.length > 0)
         setHasMask(!!firstFrame?.mask && firstFrame.mask.length > 0)
         setHasROIs(!!data.rois && data.rois.length > 0)
+        setHasRearingAnalysis(!!(data as any).rearing_analysis && !!(data as any).rearing_analysis.rois)
       } catch (error) {
         console.error('Failed to parse tracking data:', error)
         alert('Error loading JSON file: ' + (error as Error).message)
@@ -274,6 +277,50 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
         }
       })
     }
+
+    // Draw rearing ROIs if available
+    if (showRearingROIs && (trackingData as any).rearing_analysis?.rois) {
+      const rearingROIs = (trackingData as any).rearing_analysis.rois
+      rearingROIs.forEach((roi: any) => {
+        // Set color based on ROI name
+        if (roi.name === 'lower_edge') {
+          ctx.strokeStyle = 'rgba(255, 107, 107, 0.8)' // Red
+          ctx.fillStyle = 'rgba(255, 107, 107, 0.9)'
+        } else if (roi.name === 'upper_edge') {
+          ctx.strokeStyle = 'rgba(78, 205, 196, 0.8)' // Teal
+          ctx.fillStyle = 'rgba(78, 205, 196, 0.9)'
+        } else {
+          ctx.strokeStyle = 'rgba(149, 225, 211, 0.8)' // Light teal
+          ctx.fillStyle = 'rgba(149, 225, 211, 0.9)'
+        }
+
+        ctx.lineWidth = 3
+        ctx.setLineDash([5, 5])
+
+        // Draw circle
+        ctx.beginPath()
+        ctx.arc(roi.center_x, roi.center_y, roi.radius, 0, 2 * Math.PI)
+        ctx.stroke()
+        ctx.setLineDash([])
+
+        // Draw label
+        ctx.font = '14px monospace'
+        const label = roi.name.replace('_', ' ').toUpperCase()
+        ctx.fillText(label, roi.center_x - 40, roi.center_y - roi.radius - 10)
+      })
+    }
+
+    // Draw rearing indicator if current frame is rearing
+    if ((trackingData as any).rearing_analysis && frameData.rearing) {
+      // Draw REARING label in top-right corner
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.8)'
+      ctx.fillRect(canvas.width - 150, 10, 140, 40)
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 20px monospace'
+      ctx.textAlign = 'right'
+      ctx.fillText('REARING', canvas.width - 20, 38)
+      ctx.textAlign = 'left' // Reset
+    }
   }
 
   // Update canvas when frame changes
@@ -292,7 +339,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [currentFrame, trackingData, videoUrl, showKeypoints, showMask, showROIs, showTrajectory, showCentroid])
+  }, [currentFrame, trackingData, videoUrl, showKeypoints, showMask, showROIs, showTrajectory, showCentroid, showRearingROIs])
 
   // Handle video time update
   const handleTimeUpdate = () => {
@@ -364,6 +411,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
     setHasKeypoints(false)
     setHasMask(false)
     setHasROIs(false)
+    setHasRearingAnalysis(false)
   }
 
   return (
@@ -427,6 +475,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   {hasKeypoints && <span className="inline-block mr-3">• Pose detected</span>}
                   {hasMask && <span className="inline-block mr-3">• Segmentation detected</span>}
                   {hasROIs && <span className="inline-block mr-3">• ROIs detected ({trackingData.rois?.length || 0})</span>}
+                  {hasRearingAnalysis && <span className="inline-block mr-3 text-orange-400">• Rearing analysis detected</span>}
                 </div>
               </div>
             )}
@@ -504,6 +553,21 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                 />
                 <span className="text-sm text-gray-300">Trajectory</span>
+              </label>
+
+              <label
+                className={`flex items-center gap-2 p-2 rounded transition-colors ${
+                  hasRearingAnalysis ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showRearingROIs}
+                  onChange={(e) => setShowRearingROIs(e.target.checked)}
+                  disabled={!hasRearingAnalysis}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                />
+                <span className="text-sm text-gray-300">Rearing ROIs</span>
               </label>
             </div>
           </div>
@@ -640,6 +704,39 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
             </div>
           </div>
 
+          {/* Rearing Analysis Statistics */}
+          {(trackingData as any).rearing_analysis && (
+            <div className="mt-6">
+              <h4 className="text-md font-semibold mb-3 text-primary-400">Rearing Analysis</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Total Events</div>
+                  <div className="text-2xl font-bold text-orange-400">
+                    {(trackingData as any).rearing_analysis.statistics?.total_events || 0}
+                  </div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Total Duration</div>
+                  <div className="text-2xl font-bold text-purple-400">
+                    {(trackingData as any).rearing_analysis.statistics?.total_duration_seconds?.toFixed(1) || 0}s
+                  </div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Avg Duration</div>
+                  <div className="text-2xl font-bold text-blue-400">
+                    {(trackingData as any).rearing_analysis.statistics?.average_duration_seconds?.toFixed(2) || 0}s
+                  </div>
+                </div>
+                <div className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Analysis Type</div>
+                  <div className="text-lg font-bold text-cyan-400 uppercase">
+                    {(trackingData as any).rearing_analysis.analysis_type || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Current Frame Details */}
           {trackingData.tracking_data?.[currentFrame] && (
             <div className="mt-4 bg-gray-700/30 rounded-lg p-4">
@@ -699,6 +796,14 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                     </span>
                   </div>
                 )}
+                {(trackingData.tracking_data[currentFrame] as any).rearing !== undefined && (
+                  <div>
+                    <span className="text-gray-400">Rearing:</span>{' '}
+                    <span className={(trackingData.tracking_data[currentFrame] as any).rearing ? 'text-red-400 font-bold' : 'text-green-400'}>
+                      {(trackingData.tracking_data[currentFrame] as any).rearing ? 'TRUE' : 'FALSE'}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -739,6 +844,22 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                 <div className="w-4 h-4 border-2 border-cyan-400 border-dashed"></div>
                 <span className="text-sm text-gray-300">ROIs</span>
               </div>
+            )}
+            {hasRearingAnalysis && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 border-2 border-red-400 border-dashed"></div>
+                  <span className="text-sm text-gray-300">Lower Edge (Rearing)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 border-2 border-teal-400 border-dashed"></div>
+                  <span className="text-sm text-gray-300">Upper Edge (Rearing)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 bg-red-600"></div>
+                  <span className="text-sm text-gray-300">Rearing Indicator</span>
+                </div>
+              </>
             )}
           </div>
         </div>

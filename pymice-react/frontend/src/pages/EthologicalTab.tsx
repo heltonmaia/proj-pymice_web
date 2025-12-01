@@ -55,6 +55,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
   const [rearingFrameImage, setRearingFrameImage] = useState<HTMLImageElement | null>(null)
   const [showRearingSetup, setShowRearingSetup] = useState(false)
   const [rearingEvents, setRearingEvents] = useState<Array<{start_frame: number, end_frame: number, duration_frames: number}>>([])
+  const [rearingFrameResults, setRearingFrameResults] = useState<{[frameNumber: number]: boolean}>({})
 
 
   // Lock tab when analyzing
@@ -93,6 +94,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     setShowRearingSetup(false)
     setRearingROIs([])
     setRearingEvents([])
+    setRearingFrameResults({})
 
     // Store JSON filename for later use
     setJsonFileName(file.name)
@@ -116,14 +118,27 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           addLog(`Updated video frame count with JSON fps: ${newFrames} frames @ ${data.video_info.fps} fps`, 'info')
         }
 
-        // Detect analysis type for rearing
-        const firstFrame = data.tracking_data?.[0]
-        if (firstFrame?.mask) {
-          setRearingAnalysisType('segmentation')
-          addLog('Detected segmentation data in JSON', 'info')
-        } else if (firstFrame?.keypoints) {
-          setRearingAnalysisType('pose')
-          addLog('Detected pose data in JSON', 'info')
+        // Detect analysis type for rearing - search first 100 frames for data
+        let detectedType: 'segmentation' | 'pose' | null = null
+        const maxFramesToCheck = Math.min(100, data.tracking_data?.length || 0)
+
+        for (let i = 0; i < maxFramesToCheck; i++) {
+          const frame = data.tracking_data?.[i]
+          if (frame?.mask && frame.mask.length > 0) {
+            detectedType = 'segmentation'
+            addLog(`Detected segmentation data in JSON (found at frame ${i})`, 'info')
+            break
+          } else if (frame?.keypoints && frame.keypoints.length > 0) {
+            detectedType = 'pose'
+            addLog(`Detected pose data in JSON (found at frame ${i})`, 'info')
+            break
+          }
+        }
+
+        if (detectedType) {
+          setRearingAnalysisType(detectedType)
+        } else {
+          addLog('Warning: No mask or keypoints detected in first 100 frames', 'warning')
         }
       } catch (error) {
         console.error('Failed to parse tracking data:', error)
@@ -343,6 +358,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           let currentRearingState = false
           let rearingStartFrame = -1
           const detectedEvents: Array<{start_frame: number, end_frame: number, duration_frames: number}> = []
+          const frameResults: {[frameNumber: number]: boolean} = {}
 
           // Find upper edge ROI (used to detect rearing)
           const upperEdgeROI = rearingROIs.find(r => r.name === 'upper_edge')
@@ -356,6 +372,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           // Find lower edge ROI for additional detection
           const lowerEdgeROI = rearingROIs.find(r => r.name === 'lower_edge')
 
+          if (!lowerEdgeROI) {
+            addLog('Lower edge ROI not found - both lower and upper edge ROIs are required', 'error')
+            URL.revokeObjectURL(video.src)
+            return
+          }
+
           // Process each frame with visualization
           for (let i = 0; i < frames.length; i++) {
             const frame = frames[i]
@@ -363,25 +385,26 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             // Check if rearing occurred in this frame
             let isRearing = false
             let isInLowerEdge = false
+            let isInUpperEdge = false
             let detectionPoint = { x: 0, y: 0 }
 
             if (rearingAnalysisType === 'segmentation') {
               // Use centroid for segmentation
               detectionPoint = { x: frame.centroid_x, y: frame.centroid_y }
 
-              // Check if centroid is inside upper edge ROI (rearing)
+              // Calculate distances to both ROIs
               const dxUpper = detectionPoint.x - upperEdgeROI.centerX
               const dyUpper = detectionPoint.y - upperEdgeROI.centerY
               const distanceUpper = Math.sqrt(dxUpper * dxUpper + dyUpper * dyUpper)
-              isRearing = distanceUpper <= upperEdgeROI.radius
+              isInUpperEdge = distanceUpper <= upperEdgeROI.radius
 
-              // Check if centroid is inside lower edge ROI
-              if (lowerEdgeROI) {
-                const dxLower = detectionPoint.x - lowerEdgeROI.centerX
-                const dyLower = detectionPoint.y - lowerEdgeROI.centerY
-                const distanceLower = Math.sqrt(dxLower * dxLower + dyLower * dyLower)
-                isInLowerEdge = distanceLower <= lowerEdgeROI.radius
-              }
+              const dxLower = detectionPoint.x - lowerEdgeROI.centerX
+              const dyLower = detectionPoint.y - lowerEdgeROI.centerY
+              const distanceLower = Math.sqrt(dxLower * dxLower + dyLower * dyLower)
+              isInLowerEdge = distanceLower <= lowerEdgeROI.radius
+
+              // Rearing = between lower and upper edge (outside lower, inside upper)
+              isRearing = !isInLowerEdge && isInUpperEdge
             } else if (rearingAnalysisType === 'pose' && frame.keypoints) {
               // Use selected keypoints for pose detection
               for (const kpIndex of selectedKeypointsForRearing) {
@@ -389,28 +412,29 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                 if (kp && kp.conf > 0.5) {
                   detectionPoint = { x: kp.x, y: kp.y }
 
-                  // Check upper edge
+                  // Calculate distances to both ROIs
                   const dxUpper = kp.x - upperEdgeROI.centerX
                   const dyUpper = kp.y - upperEdgeROI.centerY
                   const distanceUpper = Math.sqrt(dxUpper * dxUpper + dyUpper * dyUpper)
-                  if (distanceUpper <= upperEdgeROI.radius) {
-                    isRearing = true
-                  }
+                  isInUpperEdge = distanceUpper <= upperEdgeROI.radius
 
-                  // Check lower edge
-                  if (lowerEdgeROI) {
-                    const dxLower = kp.x - lowerEdgeROI.centerX
-                    const dyLower = kp.y - lowerEdgeROI.centerY
-                    const distanceLower = Math.sqrt(dxLower * dxLower + dyLower * dyLower)
-                    if (distanceLower <= lowerEdgeROI.radius) {
-                      isInLowerEdge = true
-                    }
+                  const dxLower = kp.x - lowerEdgeROI.centerX
+                  const dyLower = kp.y - lowerEdgeROI.centerY
+                  const distanceLower = Math.sqrt(dxLower * dxLower + dyLower * dyLower)
+                  isInLowerEdge = distanceLower <= lowerEdgeROI.radius
+
+                  // Rearing = between lower and upper edge (outside lower, inside upper)
+                  if (!isInLowerEdge && isInUpperEdge) {
+                    isRearing = true
                   }
 
                   if (isRearing) break
                 }
               }
             }
+
+            // Store rearing result for this frame
+            frameResults[frame.frame_number] = isRearing
 
             // Log rearing events (when state changes)
             if (isRearing && !currentRearingState) {
@@ -587,8 +611,9 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           // Cleanup video element
           URL.revokeObjectURL(video.src)
 
-          // Store events for download
+          // Store events and frame results for download
           setRearingEvents(detectedEvents)
+          setRearingFrameResults(frameResults)
 
           // Calculate total duration
           const totalDuration = detectedEvents.reduce((sum, event) => sum + event.duration_frames, 0)
@@ -1032,7 +1057,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       />
                       <div className="flex-1">
                         <span className="text-white font-medium">Rearing</span>
-                        <p className="text-xs text-gray-400">Requires at least 2-3 ROIs (minimum: lower edge and upper edge, optional: central area) to detect when the animal's body crosses these boundaries</p>
+                        <p className="text-xs text-gray-400">Requires 2 ROIs (lower edge and upper edge). Rearing is detected when the animal's center of mass is between these two boundaries (outside lower edge, inside upper edge)</p>
                       </div>
                     </label>
 
@@ -1089,7 +1114,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                             {/* Minimum ROI Warning */}
                             {rearingROIs.length < 2 && (
                               <div className="p-2 bg-orange-500/10 border border-orange-500/30 rounded text-xs text-orange-200">
-                                ⚠️ Minimum 2 ROIs required (lower edge + upper edge). Use toolbar above video to draw ROIs.
+                                ⚠️ Both ROIs required (lower edge + upper edge). Rearing = when animal is between them. Use toolbar above video to draw ROIs.
                               </div>
                             )}
 
@@ -1254,9 +1279,16 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   const totalDurationSec = totalFrames / fps
                   const avgDurationFrames = rearingEvents.length > 0 ? totalFrames / rearingEvents.length : 0
 
+                  // Add rearing field to each frame in tracking_data
+                  const enhancedTrackingData = trackingData.tracking_data.map(frame => ({
+                    ...frame,
+                    rearing: rearingFrameResults[frame.frame_number] || false
+                  }))
+
                   // Create enhanced JSON with rearing data
                   const rearingData = {
                     ...trackingData,
+                    tracking_data: enhancedTrackingData,
                     rearing_analysis: {
                       timestamp: new Date().toISOString(),
                       analysis_type: rearingAnalysisType,

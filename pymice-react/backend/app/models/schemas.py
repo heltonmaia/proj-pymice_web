@@ -53,8 +53,12 @@ class TrackingFrame(BaseModel):
     centroid_y: float
     roi: Optional[str] = None
     roi_index: Optional[int] = None
-    detection_method: Literal["yolo", "template"]
+    detection_method: Literal["yolo", "template", "none"]
     timestamp_sec: float
+    bbox: Optional[List[float]] = None
+    confidence: Optional[float] = None
+    keypoints: Optional[List[dict]] = None
+    mask: Optional[List[List[float]]] = None
 
 
 class VideoInfo(BaseModel):

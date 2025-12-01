@@ -10,6 +10,7 @@ interface EthologicalTabProps {
 export default function EthologicalTab({ onTrackingStateChange }: EthologicalTabProps = {}) {
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null)
   const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoInfo, setVideoInfo] = useState<{ frames: number; duration: number; fps: number } | null>(null)
   const [jsonFileName, setJsonFileName] = useState<string>('')
   const [activeSubTab, setActiveSubTab] = useState<'movement' | 'behavioral'>('movement')
   const [heatmapSettings, setHeatmapSettings] = useState<HeatmapSettings>({
@@ -72,7 +73,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     const time = new Date().toLocaleTimeString()
     setAnalysisLogs(prev => [...prev, { time, message, type }])
     setTimeout(() => {
-      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      // Scroll only within the logs container, don't affect page scroll
+      logsEndRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest', // Don't scroll the page, only the container
+        inline: 'nearest'
+      })
     }, 100)
   }
 
@@ -98,6 +104,17 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
         const data = JSON.parse(event.target?.result as string)
         setTrackingData(data)
         addLog(`Tracking data loaded successfully: ${data.tracking_data?.length || 0} frames`, 'success')
+
+        // Update video info with correct FPS from JSON if video is already loaded
+        if (videoInfo && data.video_info?.fps) {
+          const newFrames = Math.round(videoInfo.duration * data.video_info.fps)
+          setVideoInfo({
+            frames: newFrames,
+            duration: videoInfo.duration,
+            fps: data.video_info.fps
+          })
+          addLog(`Updated video frame count with JSON fps: ${newFrames} frames @ ${data.video_info.fps} fps`, 'info')
+        }
 
         // Detect analysis type for rearing
         const firstFrame = data.tracking_data?.[0]
@@ -578,11 +595,50 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             <input
               type="file"
               accept="video/*"
-              onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+              onChange={async (e) => {
+                const file = e.target.files?.[0] || null
+                setVideoFile(file)
+
+                if (file) {
+                  addLog(`Loading video: ${file.name}...`, 'info')
+
+                  // Extract video information
+                  const video = document.createElement('video')
+                  video.src = URL.createObjectURL(file)
+                  video.preload = 'metadata'
+
+                  video.onloadedmetadata = () => {
+                    const duration = video.duration
+                    const fps = trackingData?.video_info?.fps || 30 // Use JSON fps if available, otherwise estimate
+                    const estimatedFrames = Math.round(duration * fps)
+
+                    setVideoInfo({
+                      frames: estimatedFrames,
+                      duration: duration,
+                      fps: fps
+                    })
+
+                    addLog(`Video loaded: ${video.videoWidth}x${video.videoHeight}, ${duration.toFixed(2)}s, ~${estimatedFrames} frames (${fps} fps)`, 'success')
+                    URL.revokeObjectURL(video.src)
+                  }
+
+                  video.onerror = () => {
+                    addLog('Failed to load video metadata', 'error')
+                    URL.revokeObjectURL(video.src)
+                  }
+                }
+              }}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
             />
             {videoFile && (
-              <p className="text-sm text-green-400 mt-2">✓ {videoFile.name}</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-sm text-green-400">✓ {videoFile.name}</p>
+                {videoInfo && (
+                  <p className="text-xs text-gray-400">
+                    • Video: ~{videoInfo.frames} frames ({videoInfo.duration.toFixed(2)}s @ {videoInfo.fps} fps)
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -599,11 +655,26 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             {trackingData && (
               <div className="mt-2 space-y-1">
                 <p className="text-sm text-green-400">
-                  ✓ {trackingData.tracking_data?.length || 0} frames loaded
+                  ✓ {jsonFileName}
+                </p>
+                <p className="text-xs text-gray-400">
+                  • JSON: {trackingData.tracking_data?.length || 0} frames
                 </p>
                 {rearingAnalysisType && (
                   <p className="text-xs text-gray-400">
                     • {rearingAnalysisType === 'segmentation' ? 'Segmentation' : 'Pose'} detected
+                  </p>
+                )}
+                {videoInfo && videoFile && (
+                  <p className={`text-xs font-medium ${
+                    Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
+                      ? 'text-green-400'
+                      : 'text-orange-400'
+                  }`}>
+                    {Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
+                      ? '✓ Frame count matches video'
+                      : `⚠ Frame mismatch: ${Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames)} frames difference`
+                    }
                   </p>
                 )}
               </div>
@@ -839,7 +910,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             <div>
               <h3 className="font-semibold text-lg">Behavioral Analysis</h3>
               <p className="text-sm text-gray-400 mt-1">
-                Advanced behavioral classification and pattern recognition (Coming soon)
+                Advanced behavioral classification and pattern recognition
               </p>
             </div>
             {showBehavioralSettings ? (

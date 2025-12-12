@@ -162,6 +162,7 @@ def process_frame(
     iou_threshold: float,
     device: str,
     inference_size: int = 640,
+    model_name: str = "",
 ) -> Dict[str, Any]:
     """
     Process a single frame with YOLO detection and template matching fallback.
@@ -177,6 +178,7 @@ def process_frame(
         iou_threshold: YOLO IOU threshold (0.0-1.0)
         device: Device to run inference on ('cuda', 'mps', or 'cpu')
         inference_size: YOLO inference image size (default: 640, smaller = less GPU memory)
+        model_name: Name of the YOLO model file (to detect seg/pose types)
 
     Returns:
         Dictionary with frame data:
@@ -185,11 +187,19 @@ def process_frame(
             "centroid_x": float or None,
             "centroid_y": float or None,
             "roi": str or None,
-            "detection_method": "yolo"|"template"|"none"
+            "detection_method": "yolo"|"template"|"none",
+            "mask": list of mask points (if segmentation model),
+            "keypoints": list of keypoints (if pose model)
         }
     """
     centroid: Optional[Point] = None
     detection_method = "none"
+    mask_data = None
+    keypoints_data = None
+
+    # Detect model type from filename
+    is_seg_model = model_name.lower().endswith('seg.pt')
+    is_pose_model = model_name.lower().endswith('pose.pt')
 
     # Try YOLO detection first
     try:
@@ -205,26 +215,71 @@ def process_frame(
                 half=True if device == "cuda" else False,  # Use FP16 on CUDA to save memory
             )
 
-            # Check if we got any detections with masks
-            if len(results) > 0 and results[0].masks is not None:
-                # Get the detection with highest confidence
-                masks = results[0].masks.data.cpu().numpy()
-                confidences = results[0].boxes.conf.cpu().numpy()
+            # Check if we got any detections
+            if len(results) > 0:
+                boxes = results[0].boxes
 
-                if len(confidences) > 0:
+                if boxes is not None and len(boxes) > 0:
+                    confidences = boxes.conf.cpu().numpy()
                     best_idx = np.argmax(confidences)
-                    mask = masks[best_idx]
 
-                    # Resize mask to frame size
-                    mask_resized = cv2.resize(mask, (frame.shape[1], frame.shape[0]))
+                    # Process segmentation masks
+                    if is_seg_model and results[0].masks is not None:
+                        masks = results[0].masks.data.cpu().numpy()
 
-                    # Threshold mask to binary
-                    binary_mask = (mask_resized > 0.5).astype(np.uint8) * 255
+                        if len(masks) > 0:
+                            mask = masks[best_idx]
 
-                    # Calculate centroid from mask
-                    centroid = calculate_centroid(binary_mask)
+                            # Resize mask to frame size
+                            mask_resized = cv2.resize(mask, (frame.shape[1], frame.shape[0]))
 
-                    if centroid is not None:
+                            # Threshold mask to binary
+                            binary_mask = (mask_resized > 0.5).astype(np.uint8) * 255
+
+                            # Calculate centroid from mask
+                            centroid = calculate_centroid(binary_mask)
+
+                            if centroid is not None:
+                                detection_method = "yolo"
+
+                                # Save mask contours for visualization
+                                contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                                if contours:
+                                    # Get largest contour
+                                    largest_contour = max(contours, key=cv2.contourArea)
+                                    # Simplify contour and convert to list of points
+                                    epsilon = 0.005 * cv2.arcLength(largest_contour, True)
+                                    approx = cv2.approxPolyDP(largest_contour, epsilon, True)
+                                    mask_data = approx.reshape(-1, 2).tolist()
+
+                    # Process pose keypoints
+                    elif is_pose_model and results[0].keypoints is not None:
+                        keypoints = results[0].keypoints.data.cpu().numpy()
+
+                        if len(keypoints) > 0:
+                            kpts = keypoints[best_idx]  # Shape: (num_keypoints, 3) - x, y, confidence
+
+                            # Calculate centroid from visible keypoints
+                            visible_kpts = kpts[kpts[:, 2] > 0.5]  # Filter by confidence
+                            if len(visible_kpts) > 0:
+                                centroid = (
+                                    int(np.mean(visible_kpts[:, 0])),
+                                    int(np.mean(visible_kpts[:, 1]))
+                                )
+                                detection_method = "yolo"
+
+                                # Save all keypoints with confidence > 0.3
+                                keypoints_data = [
+                                    {"x": float(kpt[0]), "y": float(kpt[1]), "conf": float(kpt[2])}
+                                    for kpt in kpts if kpt[2] > 0.3
+                                ]
+
+                    # Process regular detection (bbox only)
+                    elif not is_seg_model and not is_pose_model:
+                        # Use bounding box center as centroid
+                        box = boxes.xyxy[best_idx].cpu().numpy()
+                        x1, y1, x2, y2 = box
+                        centroid = (int((x1 + x2) / 2), int((y1 + y2) / 2))
                         detection_method = "yolo"
 
             # Clear GPU cache periodically to prevent memory buildup
@@ -258,7 +313,7 @@ def process_frame(
         if roi_index is not None:
             roi_name = f"roi_{roi_index}"
 
-    return {
+    result = {
         "frame_number": frame_number,
         "centroid_x": float(centroid[0]) if centroid else None,
         "centroid_y": float(centroid[1]) if centroid else None,
@@ -266,6 +321,16 @@ def process_frame(
         "roi_index": roi_index,
         "detection_method": detection_method,
     }
+
+    # Add mask data if available (segmentation model)
+    if mask_data is not None:
+        result["mask"] = mask_data
+
+    # Add keypoints data if available (pose model)
+    if keypoints_data is not None:
+        result["keypoints"] = keypoints_data
+
+    return result
 
 
 def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[np.ndarray]:

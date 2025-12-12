@@ -36,14 +36,24 @@ export interface ROIPreset {
 }
 
 // Tracking Data
+export interface Keypoint {
+  x: number;
+  y: number;
+  conf: number;
+}
+
 export interface TrackingFrame {
   frame_number: number;
   centroid_x: number;
   centroid_y: number;
   roi: string | null;
   roi_index: number | null;
-  detection_method: 'yolo' | 'template';
+  detection_method: 'yolo' | 'template' | 'none';
   timestamp_sec: number;
+  bbox?: [number, number, number, number];
+  confidence?: number;
+  keypoints?: Keypoint[];
+  mask?: [number, number][];
 }
 
 export interface VideoInfo {

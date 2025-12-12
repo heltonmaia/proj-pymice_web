@@ -26,6 +26,7 @@ if "%1"=="restart" goto restart
 if "%1"=="status" goto status
 if "%1"=="frontlogs" goto frontlogs
 if "%1"=="backlogs" goto backlogs
+if "%1"=="update" goto update
 echo Invalid command...Try again...
 exit /b
 rem ============================================================
@@ -158,5 +159,15 @@ rem FRONTLOGS
 rem ============================================================
 :frontlogs
 echo frontlogs
+exit /b
+rem ============================================================
+
+rem ============================================================
+rem UPDATE
+rem ============================================================
+:update
+echo Updating PyMiceTracking.....
+git pull
+echo Updated successfully.....
 exit /b
 rem ============================================================

@@ -62,6 +62,15 @@ class EthologicalTab:
             visible=False,
         )
 
+        # Select speed threshold
+        self.speed_select = pn.widgets.Select(
+            name="Speed selectiom",
+            options=['5', '10', '15', '20', '25'],
+            width=150,
+            height=60,
+            disabled=False,
+        )
+
         # Progress and results
         self.analysis_progress = pn.indicators.Progress(
             name="Analysis Progress", value=0, max=100, width=400, visible=False
@@ -358,6 +367,7 @@ class EthologicalTab:
         self.start_analysis_button.disabled = True
         self.abort_button.visible = True
         self.abort_button.disabled = False
+        self.speed_select.disabled = True
         self.analysis_progress.visible = True
         self.analysis_progress.value = 0
         self.download_button.visible = False
@@ -469,7 +479,7 @@ class EthologicalTab:
                         pn.Spacer(height=15),
                         pn.pane.Markdown("**Analysis Controls:**", margin=(0, 0, 10, 0)),
                         pn.Row(
-                            self.start_analysis_button,
+                            pn.Column(self.start_analysis_button, self.speed_select),
                             self.abort_button,
                             self.download_button,
                         ),

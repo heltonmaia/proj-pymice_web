@@ -486,7 +486,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `batch_tracking_${new Date().getTime()}.json`
+
+    // Generate a shorter, more readable filename with timestamp
+    const now = new Date()
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+    a.download = `batch_track_${timestamp}.json`
+
     a.click()
     URL.revokeObjectURL(url)
     addLog('✓ Batch results downloaded successfully')
@@ -502,6 +507,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       // Single file mode - automatically upload and generate server preview
       const file = filesArray[0]
       const fileSizeMB = file.size / (1024 * 1024)
+      const fileExtension = file.name.split('.').pop()?.toLowerCase()
 
       setVideoFile(file)
       setVideoFiles([])
@@ -512,8 +518,16 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       setTaskId(null)
       setTrackingFrameUrl('')
 
-      // Automatically upload and generate server preview for all videos
-      addLog(`Uploading video: ${file.name} (${fileSizeMB.toFixed(1)}MB)...`)
+      // For .avi files, skip browser preview and go straight to server preview
+      // (browsers typically don't support .avi codecs natively)
+      const shouldUseServerPreview = fileExtension === 'avi'
+
+      if (shouldUseServerPreview) {
+        addLog(`Uploading ${fileExtension?.toUpperCase()} video: ${file.name} (${fileSizeMB.toFixed(1)}MB)...`)
+        addLog('ℹ️ Using server preview (browser may not support this codec)')
+      } else {
+        addLog(`Uploading video: ${file.name} (${fileSizeMB.toFixed(1)}MB)...`)
+      }
 
       // Start upload immediately
       try {
@@ -529,13 +543,24 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           setUploadedFilename(filename)
           addLog('✓ Video uploaded successfully')
 
-          // Get frame from server (middle frame for better preview)
-          addLog('Generating preview frame from middle of video...')
-          const response = await videoApi.getFrame(filename)
-          const url = URL.createObjectURL(response.data)
-          setServerPreviewUrl(url)
-          setPreviewError(false)
-          addLog('✓ Server preview generated (will be displayed via <img> element)')
+          if (shouldUseServerPreview) {
+            // Get frame from server for formats that browsers don't support well
+            addLog('Generating preview frame from middle of video...')
+            const response = await videoApi.getFrame(filename)
+            const url = URL.createObjectURL(response.data)
+            setServerPreviewUrl(url)
+            setPreviewError(false)
+            addLog('✓ Server preview generated (will be displayed via <img> element)')
+          } else {
+            // For .mp4 and other formats, try browser preview first, then fallback to server if needed
+            // Get frame from server (middle frame for better preview)
+            addLog('Generating preview frame from middle of video...')
+            const response = await videoApi.getFrame(filename)
+            const url = URL.createObjectURL(response.data)
+            setServerPreviewUrl(url)
+            setPreviewError(false)
+            addLog('✓ Server preview generated (will be displayed via <img> element)')
+          }
         }
       } catch (error) {
         console.error('Failed to upload video:', error)
@@ -567,7 +592,14 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       // Automatically upload and generate preview for first video to help with ROI drawing
       const firstFile = filesArray[0]
       const fileSizeMB = firstFile.size / (1024 * 1024)
-      addLog(`Uploading first video for preview: ${firstFile.name} (${fileSizeMB.toFixed(1)}MB)...`)
+      const fileExtension = firstFile.name.split('.').pop()?.toLowerCase()
+
+      if (fileExtension === 'avi') {
+        addLog(`Uploading first video for preview: ${firstFile.name} (${fileSizeMB.toFixed(1)}MB)...`)
+        addLog('ℹ️ Using server preview (browser may not support this codec)')
+      } else {
+        addLog(`Uploading first video for preview: ${firstFile.name} (${fileSizeMB.toFixed(1)}MB)...`)
+      }
 
       try {
         setIsUploading(true)
@@ -612,7 +644,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         clearTimeout(loadingTimeoutRef.current)
         loadingTimeoutRef.current = null
       }
-      addLog('⚠️ Video codec not supported by browser. Auto-generating server preview...')
+      addLog('ℹ️ Browser cannot play this codec natively. Using server preview...')
       // Automatically generate server preview when native loading fails
       handleGenerateServerPreview()
     }
@@ -702,7 +734,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         if (video.readyState < 1) {
           console.warn('Video loading timed out, auto-generating server preview')
           setIsVideoLoading(false)
-          addLog('⚠️ Video loading taking too long. Auto-generating server preview...')
+          addLog('ℹ️ Video loading taking too long. Using server preview...')
           handleGenerateServerPreview()
         }
       }, 5000)
@@ -1098,7 +1130,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', `tracking_results_${taskId}.json`)
+
+      // Generate a shorter, more readable filename with timestamp
+      const now = new Date()
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const videoBaseName = videoFile?.name.replace(/\.[^/.]+$/, '') || 'video'
+      link.setAttribute('download', `${videoBaseName}_track_${timestamp}.json`)
+
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -1123,7 +1161,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             </label>
             <input
               type="file"
-              accept="video/*"
+              accept="video/mp4,video/avi,video/x-msvideo,.mp4,.avi"
               multiple
               onChange={handleVideoFilesChange}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"

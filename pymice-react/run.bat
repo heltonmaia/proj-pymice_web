@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem .bat developed by Marcos Aurelio for PyMiceTracking
+rem .bat developed by Marcos Aurelio for PyMice Web
 rem ============================================================
 
 setlocal enabledelayedexpansion 
@@ -40,7 +40,7 @@ rem MAIN MENU
 rem ============================================================
 :menu
 echo ====================================================================================================
-echo x PyMiceTracking Web Application - Developed by Helton Maia, Marcos Aurelio and Richardson Menezes x
+echo x PyMice Web Application - Developed by Helton Maia, Marcos Aurelio and Richardson Menezes x
 echo ====================================================================================================
 
 echo Options available:
@@ -166,7 +166,7 @@ rem ============================================================
 rem UPDATE
 rem ============================================================
 :update
-echo Updating PyMiceTracking.....
+echo Updating PyMice Web.....
 git pull
 echo Updated successfully.....
 exit /b

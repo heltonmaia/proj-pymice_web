@@ -1,3 +1,3 @@
-"""PyMiceTracking Web Backend API"""
+"""PyMice Web Backend API"""
 
 __version__ = "1.0.0"

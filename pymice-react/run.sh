@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# PyMiceTracking Web - Script Unificado
+# PyMice Web - Script Unificado
 # Uso: ./run.sh [start|stop|status|restart]
 
 set -e
@@ -25,7 +25,7 @@ show_banner() {
     echo -e "${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════╗"
     echo "║                                                                ║"
-    echo "║           PyMiceTracking Web - Control Script                  ║"
+    echo "║           PyMice Web - Control Script                          ║"
     echo "║                                                                ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}\n"
@@ -100,7 +100,7 @@ show_status() {
 start_services() {
     show_banner
 
-    echo -e "${GREEN}🚀 Iniciando PyMiceTracking Web...${NC}\n"
+    echo -e "${GREEN}🚀 Iniciando PyMice Web...${NC}\n"
 
     # Verificar se já está rodando
     read backend_status frontend_status <<< $(check_status)
@@ -233,7 +233,7 @@ start_services() {
 stop_services() {
     show_banner
 
-    echo -e "${YELLOW}🛑 Parando PyMiceTracking Web...${NC}\n"
+    echo -e "${YELLOW}🛑 Parando PyMice Web...${NC}\n"
 
     local stopped=false
 

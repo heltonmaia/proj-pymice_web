@@ -36,8 +36,8 @@ function App() {
             <div className="flex items-center gap-3">
               <MouseIcon className="w-10 h-10 text-primary-500" style={{ transform: 'scaleX(-1)' }} />
               <div>
-                <h1 className="text-2xl font-bold text-white">PyMiceTracking</h1>
-                <p className="text-sm text-gray-400">Web Application for Mice Behavioral Analysis</p>
+                <h1 className="text-2xl font-bold text-white">PyMice Web</h1>
+                <p className="text-sm text-gray-400">Behavioral Analysis Platform</p>
               </div>
             </div>
             <div className="text-sm text-gray-400">
@@ -88,7 +88,7 @@ function App() {
       {/* Footer */}
       <footer className="bg-gray-800 border-t border-gray-700 mt-12">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-gray-400">
-          <p>PyMiceTracking Web - Behavioral Analysis Platform</p>
+          <p>PyMice Web - Behavioral Analysis Platform</p>
           <p className="mt-1">Built with React + TypeScript + FastAPI</p>
         </div>
       </footer>

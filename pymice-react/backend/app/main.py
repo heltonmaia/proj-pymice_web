@@ -9,7 +9,7 @@ import shutil
 from app.routers import camera, video, tracking, roi, analysis, system
 
 app = FastAPI(
-    title="PyMiceTracking Web API",
+    title="PyMice Web API",
     description="Backend API for Mouse Behavioral Analysis",
     version="1.0.0",
 )
@@ -119,7 +119,7 @@ app.include_router(system.router, prefix="/api/system", tags=["System"])
 @app.get("/")
 async def root():
     return {
-        "message": "PyMiceTracking Web API",
+        "message": "PyMice Web API",
         "version": "1.0.0",
         "docs": "/docs",
     }

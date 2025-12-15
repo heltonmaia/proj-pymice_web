@@ -2,7 +2,7 @@
 
 Modern web application for mouse tracking and behavioral analysis using React + TypeScript and FastAPI.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.11
@@ -103,7 +103,7 @@ pymice-react/
     └── public/             # Static assets
 ```
 
-## ✨ Features
+## Features
 
 ### 1. Camera Tab
 - Live streaming from USB cameras
@@ -148,7 +148,7 @@ pymice-react/
 - OpenCV (video processing)
 - ffmpeg/ffprobe (metadata extraction)
 
-## 📡 Main API Endpoints
+## Main API Endpoints
 
 ### Tracking
 - `GET /api/tracking/models` - List YOLO models
@@ -170,7 +170,7 @@ pymice-react/
 
 Complete documentation: http://localhost:8000/docs
 
-## 🎯 How to Use
+## How to Use
 
 ### Tracking with ROI Templates
 

@@ -42,6 +42,8 @@ node_modules/
 
 # Temporary files
 temp/
+!temp/models/
+!temp/models/*.pt
 *.log
 
 # OS

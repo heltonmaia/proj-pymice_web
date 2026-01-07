@@ -1212,6 +1212,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             </select>
           </div>
         </div>
+        
+        {/* Explain ROIS priority */}
+        <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">About ROIs priority:</h3>
+            <label className="block text-sm font-medium text-gray-300 mb-2">When multiple ROIs are drawn, later-drawn regions are treated as higher priority for analysis. This assumes you're refining your focus from broad to specific areas.</label>
+        </div>
 
         {/* ROI Templates Section */}
         <div className="bg-gray-700/30 rounded-lg p-4 mb-4">

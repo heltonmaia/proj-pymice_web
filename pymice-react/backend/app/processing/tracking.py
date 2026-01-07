@@ -91,7 +91,7 @@ def point_in_roi(point: Point, roi: ROI) -> bool:
 
 def get_roi_containing_point(point: Point, rois: List[ROI]) -> Optional[int]:
     """
-    Find which ROI contains a point.
+    Find which ROI contains a point. Suppose last ROIS have a priority over firstly drawn
 
     Args:
         point: (x, y) coordinates
@@ -100,22 +100,16 @@ def get_roi_containing_point(point: Point, rois: List[ROI]) -> Optional[int]:
     Returns:
         Index of ROI containing the point, or None if not in any ROI
     """
-    roi_index = None
-    roi_radius = 10000
     
-    for idx, roi in enumerate(rois):   
-        if point_in_roi(point, roi):
-            roi_dict = roi.model_dump()
-            
-            if roi_dict['roi_type'] == 'Circle':
-                if roi_radius > roi_dict['radius']:
-                    roi_index = idx
-                    roi_radius = roi_dict['radius']
-            else:
-                if roi_index is None:
-                    roi_index = idx             
+    idx = list(range(len(rois)))[::-1]
+    elements = list(zip(idx, rois[::-1]))
+    print(idx)
 
-    return roi_index
+    for idx, roi in elements: #enumerate(rois[::-1]):   
+        if point_in_roi(point, roi):
+            return idx
+            
+    return None
 
 
 def draw_rois(frame: np.ndarray, rois: List[ROI], color: tuple = (0, 255, 0),

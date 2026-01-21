@@ -891,7 +891,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       const width = x - drawStart.x
       const height = y - drawStart.y
       ctx.strokeRect(drawStart.x, drawStart.y, width, height)
-    } else if (currentROIType === 'Circle' && isDrawing && drawStart) {
+    } else if ((currentROIType === 'Circle' || currentROIType == 'OpenField') && isDrawing && drawStart) {
       const radius = Math.sqrt(
         Math.pow(x - drawStart.x, 2) + Math.pow(y - drawStart.y, 2)
       )
@@ -948,7 +948,8 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     const y = (e.clientY - rect.top) * scaleY
 
     let newROI: ROI | null = null
-
+    let newROI_open_field: ROI | null = null
+    
     if (currentROIType === 'Rectangle') {
       const width = Math.abs(x - drawStart.x)
       const height = Math.abs(y - drawStart.y)
@@ -973,14 +974,41 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         center_y: drawStart.y,
         radius,
       }
+    } else if (currentROIType === 'OpenField') {
+      const radius = Math.sqrt(
+        Math.pow(x - drawStart.x, 2) + Math.pow(y - drawStart.y, 2)
+      )
+      const small_radius = radius * 0.6
+
+      // add bigger circle first
+      newROI = {
+        roi_type: 'Circle',
+        center_x: drawStart.x,
+        center_y: drawStart.y,
+        radius,
+      }
+
+      // add smaller circle
+      newROI_open_field = {
+        roi_type: 'Circle',
+        center_x: drawStart.x,
+        center_y: drawStart.y,
+        radius: small_radius,
+      }
+
     }
 
-    if (newROI) {
+    if (newROI && newROI_open_field) {
+      setRois([...rois, newROI, newROI_open_field])
+    }
+    else if(newROI){
       setRois([...rois, newROI])
     }
 
     setIsDrawing(false)
     setDrawStart(null)
+    console.log(rois)
+
   }
 
   const handleStartTracking = async () => {
@@ -1209,6 +1237,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               <option value="Rectangle">Rectangle</option>
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
+              <option value="OpenField">Open Field</option>
             </select>
           </div>
         </div>

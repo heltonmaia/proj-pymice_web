@@ -52,7 +52,6 @@ def create_roi_mask(rois: List[ROI], frame_shape: tuple[int, int]) -> Optional[n
 
     return mask
 
-
 def point_in_roi(point: Point, roi: ROI) -> bool:
     """
     Check if a point is inside an ROI.

@@ -102,7 +102,6 @@ def get_roi_containing_point(point: Point, rois: List[ROI]) -> Optional[int]:
     
     idx = list(range(len(rois)))[::-1]
     elements = list(zip(idx, rois[::-1]))
-    print(idx)
 
     for idx, roi in elements: #enumerate(rois[::-1]):   
         if point_in_roi(point, roi):

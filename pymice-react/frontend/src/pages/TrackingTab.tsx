@@ -887,11 +887,11 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     ctx.lineWidth = 2
     ctx.setLineDash([5, 5])
 
-    if (currentROIType === 'Rectangle' && isDrawing && drawStart) {
+    if ((currentROIType === 'Rectangle' || currentROIType === 'OpenFieldRectangle') && isDrawing && drawStart) {
       const width = x - drawStart.x
       const height = y - drawStart.y
       ctx.strokeRect(drawStart.x, drawStart.y, width, height)
-    } else if ((currentROIType === 'Circle' || currentROIType == 'OpenField') && isDrawing && drawStart) {
+    } else if ((currentROIType === 'Circle' || currentROIType == 'OpenFieldCircle') && isDrawing && drawStart) {
       const radius = Math.sqrt(
         Math.pow(x - drawStart.x, 2) + Math.pow(y - drawStart.y, 2)
       )
@@ -974,7 +974,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         center_y: drawStart.y,
         radius,
       }
-    } else if (currentROIType === 'OpenField') {
+    } else if (currentROIType === 'OpenFieldCircle') {
       const radius = Math.sqrt(
         Math.pow(x - drawStart.x, 2) + Math.pow(y - drawStart.y, 2)
       )
@@ -994,6 +994,29 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         center_x: drawStart.x,
         center_y: drawStart.y,
         radius: small_radius,
+      }
+
+    }
+    else if (currentROIType === 'OpenFieldRectangle'){
+      const width = Math.abs(x - drawStart.x)
+      const height = Math.abs(y - drawStart.y)
+      const centerX = (drawStart.x + x) / 2
+      const centerY = (drawStart.y + y) / 2
+
+      newROI = {
+        roi_type: 'Rectangle',
+        center_x: centerX,
+        center_y: centerY,
+        width,
+        height,
+      }
+
+      newROI_open_field = {
+        roi_type: 'Rectangle',
+        center_x: centerX,
+        center_y: centerY,
+        width: 0.6*width,
+        height: 0.6*height,
       }
 
     }
@@ -1237,7 +1260,8 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               <option value="Rectangle">Rectangle</option>
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
-              <option value="OpenField">Open Field</option>
+              <option value="OpenFieldCircle">Open Field - Circle</option>
+              <option value="OpenFieldRectangle">Open Field - Rectangle</option>
             </select>
           </div>
         </div>

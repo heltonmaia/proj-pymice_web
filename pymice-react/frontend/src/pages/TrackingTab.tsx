@@ -1011,6 +1011,15 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
   }
 
+  const handleAddFullFrameROI = () => {
+    const newROI: FullFrameROI = {
+      roi_type: 'FullFrame',
+      center_x: 0,
+      center_y: 0,
+    }
+    setRois([...rois, newROI])
+  }
+
   const handleStartTracking = async () => {
     if (!videoFile || !modelFile) return
 
@@ -1238,6 +1247,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
               <option value="OpenField">Open Field</option>
+              <option value="FullFrame">Full Frame (Todo o vídeo)</option>
             </select>
           </div>
         </div>
@@ -1788,6 +1798,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           )}
           {!trackingFrameUrl && (
             <>
+              <button
+                onClick={handleAddFullFrameROI}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"
+              >
+                Add Full Frame
+              </button>
               <button
                 onClick={() => setRois([])}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"

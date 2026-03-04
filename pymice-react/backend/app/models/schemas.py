@@ -34,7 +34,13 @@ class PolygonROI(BaseModel):
     vertices: List[List[float]]
 
 
-ROI = Union[RectangleROI, CircleROI, PolygonROI]
+class FullFrameROI(BaseModel):
+    roi_type: Literal["FullFrame"]
+    center_x: float = 0.0
+    center_y: float = 0.0
+
+
+ROI = Union[RectangleROI, CircleROI, PolygonROI, FullFrameROI]
 
 
 class ROIPreset(BaseModel):

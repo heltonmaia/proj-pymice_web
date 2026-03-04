@@ -50,6 +50,10 @@ def create_roi_mask(rois: List[ROI], frame_shape: tuple[int, int]) -> Optional[n
             points = np.array(roi.vertices, dtype=np.int32)
             cv2.fillPoly(mask, [points], 255)
 
+        elif roi.roi_type == "FullFrame":
+            # Cover entire frame
+            mask.fill(255)
+
     return mask
 
 def point_in_roi(point: Point, roi: ROI) -> bool:
@@ -84,6 +88,9 @@ def point_in_roi(point: Point, roi: ROI) -> bool:
         # Use OpenCV's pointPolygonTest
         result = cv2.pointPolygonTest(points, (float(x), float(y)), False)
         return result >= 0
+
+    elif roi.roi_type == "FullFrame":
+        return True
 
     return False
 
@@ -191,8 +198,10 @@ def process_frame(
     keypoints_data = None
 
     # Detect model type from filename
-    is_seg_model = model_name.lower().endswith('seg.pt')
-    is_pose_model = model_name.lower().endswith('pose.pt')
+    model_name_lower = model_name.lower()
+    is_yolo26 = "26" in model_name_lower
+    is_seg_model = is_yolo26 and model_name_lower.endswith('seg.pt')
+    is_pose_model = "pose.pt" in model_name_lower
 
     # Try YOLO detection first
     try:

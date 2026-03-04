@@ -100,10 +100,13 @@ def get_video_info_ffprobe(video_path: str) -> dict:
 @router.get("/models")
 async def list_models():
     """List available YOLO models"""
+    print(f"DEBUG: Listing models from {os.path.abspath(MODEL_DIR)}")
     if not os.path.exists(MODEL_DIR):
+        print(f"DEBUG: Creating {MODEL_DIR}")
         os.makedirs(MODEL_DIR, exist_ok=True)
 
     models = [f for f in os.listdir(MODEL_DIR) if f.endswith('.pt')]
+    print(f"DEBUG: Found models: {models}")
 
     return ApiResponse(success=True, data={"models": models})
 

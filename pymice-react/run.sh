@@ -146,7 +146,7 @@ start_services() {
             echo -e "${RED}✗ Ambiente virtual UV não encontrado!${NC}"
             echo ""
             echo -e "${YELLOW}Solução:${NC}"
-            echo "  Configure o ambiente UV conforme SETUP_UV.md"
+            echo "  Rode ./setup_backend.sh para configurar o ambiente."
             echo ""
             cd ..
             exit 1
@@ -156,14 +156,6 @@ start_services() {
 
         # Ativar venv
         source "$VENV_PATH/bin/activate"
-
-        # Instalar dependências
-        if [ ! -f "$VENV_PATH/.installed" ]; then
-            echo "   Instalando dependências..."
-            pip install -q --upgrade pip
-            pip install -q -r requirements.txt
-            touch "$VENV_PATH/.installed"
-        fi
 
         # Criar diretórios temp
         mkdir -p temp/{videos,models,tracking,analysis}

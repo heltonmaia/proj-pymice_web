@@ -1,5 +1,5 @@
 // ROI Types
-export type ROIType = 'Rectangle' | 'Circle' | 'Polygon' | 'OpenField';
+export type ROIType = 'Rectangle' | 'Circle' | 'Polygon' | 'OpenField' | 'FullFrame';
 
 export interface BaseROI {
   roi_type: ROIType;
@@ -29,7 +29,11 @@ export interface OpenFieldROI extends BaseROI{
   max_radius: number;
 }
 
-export type ROI = RectangleROI | CircleROI | PolygonROI | OpenFieldROI;
+export interface FullFrameROI extends BaseROI {
+  roi_type: 'FullFrame';
+}
+
+export type ROI = RectangleROI | CircleROI | PolygonROI | OpenFieldROI | FullFrameROI;
 
 // ROI Preset
 export interface ROIPreset {

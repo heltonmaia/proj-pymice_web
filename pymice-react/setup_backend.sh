@@ -4,7 +4,7 @@
 set -e
 
 # Configura cache compartilhado do uv
-export UV_CACHE_DIR=/mnt/hd3/uv-cache
+export UV_CACHE_DIR=/mnt/hd3/uv-common/uv-web
 
 # --- Helper functions ---
 print_info() {
@@ -31,7 +31,7 @@ print_success "uv is installed."
 
 # 2. Define project structure
 BACKEND_DIR="backend"
-VENV_DIR="/mnt/hd3/uv-common/uv-web-yolo"
+VENV_DIR="/mnt/hd3/uv-common/pymice-react-venv"
 REQUIREMENTS_FILE="$BACKEND_DIR/requirements.txt"
 SYMLINK_NAME="uv-env"
 PYTHON_VERSION="python3.11"

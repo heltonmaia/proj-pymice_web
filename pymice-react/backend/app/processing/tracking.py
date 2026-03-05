@@ -363,23 +363,19 @@ def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[
     frame_step = max(1, middle_frames_count // sample_frames)
 
     frames = []
-    frame_idx = 0
-
-    while True:
+    
+    for i in range(sample_frames):
+        target_frame = start_frame + (i * frame_step)
+        if target_frame >= total_frames:
+            break
+            
+        cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
         ret, frame = cap.read()
         if not ret:
             break
-
-        # Only process frames in the middle section
-        if start_frame <= frame_idx <= end_frame:
-            if (frame_idx - start_frame) % frame_step == 0:
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                frames.append(gray.astype(np.float32))
-
-                if len(frames) >= sample_frames:
-                    break
-
-        frame_idx += 1
+            
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frames.append(gray.astype(np.float32))
 
     cap.release()
 

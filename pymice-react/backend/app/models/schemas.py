@@ -154,9 +154,17 @@ class HeatmapSettings(BaseModel):
     moving_average_window: int = Field(default=30, ge=5, le=200)
 
 
+class AnalysisOptions(BaseModel):
+    heatmap: bool = True
+    velocity_over_time: bool = True
+    velocity_distribution: bool = True
+    activity_classification: bool = True
+
+
 class HeatmapRequest(BaseModel):
     tracking_data: TrackingData
     settings: HeatmapSettings
+    options: AnalysisOptions = Field(default_factory=AnalysisOptions)
 
 
 class OpenFieldAnalysisRequest(BaseModel):

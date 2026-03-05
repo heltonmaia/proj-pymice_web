@@ -180,6 +180,12 @@ export const analysisApi = {
   downloadCompleteAnalysis: (params: {
     tracking_data: TrackingData
     settings: HeatmapSettings
+    options?: {
+      heatmap?: boolean
+      velocity_over_time?: boolean
+      velocity_distribution?: boolean
+      activity_classification?: boolean
+    }
   }) =>
     api.post<Blob>('/analysis/download', params, { responseType: 'blob' }),
 

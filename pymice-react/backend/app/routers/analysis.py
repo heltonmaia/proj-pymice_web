@@ -540,116 +540,96 @@ async def download_complete_analysis(request: HeatmapRequest):
         temp_dir = TEMP_DIR / timestamp
         temp_dir.mkdir(exist_ok=True)
 
-        # Generate individual plots
+        # Get analysis options (with defaults for backwards compatibility)
+        options = request.options if hasattr(request, 'options') else None
+        include_heatmap = options.heatmap if options else True
+        include_velocity_time = options.velocity_over_time if options else True
+        include_velocity_dist = options.velocity_distribution if options else True
+        include_activity = options.activity_classification if options else True
+
+        # Generate individual plots based on selected options
+        plot_count = 0
+
         # 1. Heatmap
-        plt.figure(figsize=(12, 8))
-        heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
-        heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
-        extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
-        im = plt.imshow(heatmap_smooth.T, origin='lower', extent=extent,
-                       cmap=settings.colormap, aspect='equal',
-                       alpha=settings.transparency, interpolation='bilinear')
-        plt.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
-        plt.scatter(center_x, center_y, c='red', s=100, marker='x',
-                   linewidth=3, label='Center of Mass')
-        plt.colorbar(im, label='Movement Density')
-        plt.title('Animal Movement Heatmap', fontsize=16, fontweight='bold')
-        plt.xlabel('X Position (pixels)', fontsize=12)
-        plt.ylabel('Y Position (pixels)', fontsize=12)
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-        plt.savefig(temp_dir / '01_heatmap.png', dpi=300, bbox_inches='tight')
-        plt.close()
+        if include_heatmap:
+            plot_count += 1
+            plt.figure(figsize=(12, 8))
+            heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
+            heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
+            extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
+            im = plt.imshow(heatmap_smooth.T, origin='lower', extent=extent,
+                           cmap=settings.colormap, aspect='equal',
+                           alpha=settings.transparency, interpolation='bilinear')
+            plt.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
+            plt.scatter(center_x, center_y, c='red', s=100, marker='x',
+                       linewidth=3, label='Center of Mass')
+            plt.colorbar(im, label='Movement Density')
+            plt.title('Animal Movement Heatmap', fontsize=16, fontweight='bold')
+            plt.xlabel('X Position (pixels)', fontsize=12)
+            plt.ylabel('Y Position (pixels)', fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.savefig(temp_dir / f'{plot_count:02d}_heatmap.png', dpi=300, bbox_inches='tight')
+            plt.close()
 
         # 2. Velocity over time
-        plt.figure(figsize=(10, 6))
-        time_points = timestamps[1:]
-        plt.plot(time_points, velocities, 'g-', linewidth=1, alpha=0.5, label='Instantaneous')
+        if include_velocity_time:
+            plot_count += 1
+            plt.figure(figsize=(10, 6))
+            time_points = timestamps[1:]
+            plt.plot(time_points, velocities, 'g-', linewidth=1, alpha=0.5, label='Instantaneous')
 
-        # Calculate moving average
-        window = settings.moving_average_window
-        if len(velocities) >= window:
-            moving_avg = np.convolve(velocities, np.ones(window)/window, mode='valid')
-            # Adjust time points for moving average (centered)
-            offset = (window - 1) // 2
-            ma_time = time_points[offset:offset + len(moving_avg)]
-            plt.plot(ma_time, moving_avg, 'b-', linewidth=2,
-                    label=f'Moving Avg (window={window})')
+            # Calculate moving average
+            window = settings.moving_average_window
+            if len(velocities) >= window:
+                moving_avg = np.convolve(velocities, np.ones(window)/window, mode='valid')
+                # Adjust time points for moving average (centered)
+                offset = (window - 1) // 2
+                ma_time = time_points[offset:offset + len(moving_avg)]
+                plt.plot(ma_time, moving_avg, 'b-', linewidth=2,
+                        label=f'Moving Avg (window={window})')
 
-        plt.axhline(y=np.mean(velocities), color='r', linestyle='--',
-                   label=f'Overall Mean: {np.mean(velocities):.1f}px/s')
-        plt.axhline(y=movement_threshold, color='orange', linestyle=':',
-                   label='Movement threshold')
-        plt.title('Movement Velocity', fontsize=16, fontweight='bold')
-        plt.xlabel('Time (seconds)')
-        plt.ylabel('Velocity (pixels/second)')
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-        plt.savefig(temp_dir / '02_velocity.png', dpi=300, bbox_inches='tight')
-        plt.close()
+            plt.axhline(y=np.mean(velocities), color='r', linestyle='--',
+                       label=f'Overall Mean: {np.mean(velocities):.1f}px/s')
+            plt.axhline(y=movement_threshold, color='orange', linestyle=':',
+                       label='Movement threshold')
+            plt.title('Movement Velocity', fontsize=16, fontweight='bold')
+            plt.xlabel('Time (seconds)')
+            plt.ylabel('Velocity (pixels/second)')
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.savefig(temp_dir / f'{plot_count:02d}_velocity.png', dpi=300, bbox_inches='tight')
+            plt.close()
 
         # 3. Velocity distribution
-        plt.figure(figsize=(8, 6))
-        plt.hist(velocities, bins=settings.velocity_bins, alpha=0.7, color='purple', edgecolor='black')
-        plt.axvline(x=np.mean(velocities), color='r', linestyle='--',
-                   label=f'Mean: {np.mean(velocities):.1f}px/s')
-        plt.axvline(x=movement_threshold, color='orange', linestyle=':',
-                   label='Movement threshold')
-        plt.title('Velocity Distribution', fontsize=16, fontweight='bold')
-        plt.xlabel('Velocity (pixels/second)')
-        plt.ylabel('Frequency')
-        plt.legend()
-        plt.savefig(temp_dir / '03_velocity_distribution.png', dpi=300, bbox_inches='tight')
-        plt.close()
+        if include_velocity_dist:
+            plot_count += 1
+            plt.figure(figsize=(8, 6))
+            plt.hist(velocities, bins=settings.velocity_bins, alpha=0.7, color='purple', edgecolor='black')
+            plt.axvline(x=np.mean(velocities), color='r', linestyle='--',
+                       label=f'Mean: {np.mean(velocities):.1f}px/s')
+            plt.axvline(x=movement_threshold, color='orange', linestyle=':',
+                       label='Movement threshold')
+            plt.title('Velocity Distribution', fontsize=16, fontweight='bold')
+            plt.xlabel('Velocity (pixels/second)')
+            plt.ylabel('Frequency')
+            plt.legend()
+            plt.savefig(temp_dir / f'{plot_count:02d}_velocity_distribution.png', dpi=300, bbox_inches='tight')
+            plt.close()
 
         # 4. Activity classification
-        plt.figure(figsize=(8, 8))
-        labels = ['Moving', 'Stationary']
-        sizes = [1 - stationary_ratio, stationary_ratio]
-        colors = ['#ff9999', '#66b3ff']
-        plt.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=90)
-        plt.title('Activity Classification', fontsize=16, fontweight='bold')
-        plt.savefig(temp_dir / '04_activity_classification.png', dpi=300, bbox_inches='tight')
-        plt.close()
+        if include_activity:
+            plot_count += 1
+            plt.figure(figsize=(8, 8))
+            labels = ['Moving', 'Stationary']
+            sizes = [1 - stationary_ratio, stationary_ratio]
+            colors = ['#ff9999', '#66b3ff']
+            plt.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=90)
+            plt.title('Activity Classification', fontsize=16, fontweight='bold')
+            plt.savefig(temp_dir / f'{plot_count:02d}_activity_classification.png', dpi=300, bbox_inches='tight')
+            plt.close()
 
-        # Create enhanced JSON with velocity data
-        enhanced_data = {
-            "video_name": tracking_data.video_name,
-            "experiment_type": tracking_data.experiment_type,
-            "timestamp": tracking_data.timestamp,
-            "video_info": tracking_data.video_info.model_dump(),
-            "statistics": tracking_data.statistics.model_dump(),
-            "analysis_summary": {
-                "center_of_mass": {"x": float(center_x), "y": float(center_y)},
-                "total_distance": float(total_distance),
-                "duration_sec": float(timestamps[-1] - timestamps[0]),
-                "mean_velocity": float(np.mean(velocities)),
-                "max_velocity": float(np.max(velocities)),
-                "min_velocity": float(np.min(velocities)),
-                "movement_threshold": float(movement_threshold),
-                "stationary_ratio": float(stationary_ratio),
-                "moving_ratio": float(1 - stationary_ratio)
-            },
-            "rois": [roi.model_dump() for roi in tracking_data.rois],
-            "tracking_data_with_velocity": []
-        }
-
-        # Add velocity to each frame
-        for i, frame in enumerate(tracking_data.tracking_data):
-            frame_data = frame.model_dump()
-            # Add velocity (0 for first frame, calculated for others)
-            if i > 0 and i-1 < len(velocities):
-                frame_data["velocity"] = float(velocities[i-1])
-            else:
-                frame_data["velocity"] = 0.0
-            enhanced_data["tracking_data_with_velocity"].append(frame_data)
-
-        # Save enhanced JSON
-        json_path = temp_dir / 'analysis_data_with_velocity.json'
-        with open(json_path, 'w') as f:
-            json.dump(enhanced_data, f, indent=2)
-
-        # Create ZIP file
+        # Create ZIP file (images only, no JSON)
         zip_path = TEMP_DIR / f'analysis_{timestamp}.zip'
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file_path in temp_dir.iterdir():

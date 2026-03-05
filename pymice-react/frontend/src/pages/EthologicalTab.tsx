@@ -28,6 +28,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
   const [showSettings, setShowSettings] = useState(false)
   const [showBehavioralSettings, setShowBehavioralSettings] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Movement Analysis Selection
+  const [movementAnalysisOptions, setMovementAnalysisOptions] = useState({
+    heatmap: true,
+    velocityOverTime: true,
+    velocityDistribution: true,
+    activityClassification: true,
+  })
   const [analysisLogs, setAnalysisLogs] = useState<Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>>([])
   const logsEndRef = useRef<HTMLDivElement>(null)
 
@@ -990,7 +998,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
               <div>
                 <h3 className="font-semibold text-lg">Movement Analysis</h3>
                 <p className="text-sm text-gray-400 mt-1">
-                  Configure parameters for heatmap generation and velocity analysis
+                  Select analyses and configure parameters
                 </p>
               </div>
               {showSettings ? (
@@ -1001,175 +1009,162 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             </div>
 
             {showSettings && (
-              <>
-                <h4 className="font-medium text-gray-300 mb-3 mt-6">Heatmap Configuration</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Colormap
-                </label>
-                <select
-                  value={heatmapSettings.colormap}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      colormap: e.target.value as HeatmapSettings['colormap'],
-                    })
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                >
-                  <option value="hot">Hot</option>
-                  <option value="viridis">Viridis</option>
-                  <option value="plasma">Plasma</option>
-                  <option value="jet">Jet</option>
-                  <option value="rainbow">Rainbow</option>
-                  <option value="coolwarm">Cool Warm</option>
-                </select>
-              </div>
+              <div className="mt-6 space-y-4">
+                {/* Heatmap Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.heatmap
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.heatmap}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, heatmap: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Heatmap</span>
+                      <p className="text-xs text-gray-400">Movement density map with trajectory overlay</p>
+                    </div>
+                  </label>
+                  {movementAnalysisOptions.heatmap && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Colormap</label>
+                          <select
+                            value={heatmapSettings.colormap}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, colormap: e.target.value as HeatmapSettings['colormap'] })}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                          >
+                            <option value="hot">Hot</option>
+                            <option value="viridis">Viridis</option>
+                            <option value="plasma">Plasma</option>
+                            <option value="jet">Jet</option>
+                            <option value="rainbow">Rainbow</option>
+                            <option value="coolwarm">Cool Warm</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Resolution: {heatmapSettings.resolution}</label>
+                          <input type="range" min="20" max="100" step="10" value={heatmapSettings.resolution}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, resolution: parseInt(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Transparency: {heatmapSettings.transparency.toFixed(1)}</label>
+                          <input type="range" min="0" max="1" step="0.1" value={heatmapSettings.transparency}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, transparency: parseFloat(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Smoothing: {heatmapSettings.gaussian_sigma?.toFixed(1)}</label>
+                          <input type="range" min="0" max="3" step="0.5" value={heatmapSettings.gaussian_sigma}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, gaussian_sigma: parseFloat(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Resolution: {heatmapSettings.resolution}
-                </label>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  step="10"
-                  value={heatmapSettings.resolution}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      resolution: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-              </div>
+                {/* Velocity Over Time Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.velocityOverTime
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.velocityOverTime}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocityOverTime: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Velocity Over Time</span>
+                      <p className="text-xs text-gray-400">Movement speed plotted over time with moving average</p>
+                    </div>
+                  </label>
+                  {movementAnalysisOptions.velocityOverTime && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Moving Average Window: {heatmapSettings.moving_average_window} frames</label>
+                          <input type="range" min="5" max="200" step="5" value={heatmapSettings.moving_average_window}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, moving_average_window: parseInt(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile</label>
+                          <input type="range" min="50" max="95" step="5" value={heatmapSettings.movement_threshold_percentile}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, movement_threshold_percentile: parseInt(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Transparency: {heatmapSettings.transparency.toFixed(2)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={heatmapSettings.transparency}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      transparency: parseFloat(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-              </div>
+                {/* Velocity Distribution Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.velocityDistribution
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.velocityDistribution}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocityDistribution: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Velocity Distribution</span>
+                      <p className="text-xs text-gray-400">Histogram showing frequency of different velocities</p>
+                    </div>
+                  </label>
+                  {movementAnalysisOptions.velocityDistribution && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Histogram Bins: {heatmapSettings.velocity_bins}</label>
+                        <input type="range" min="20" max="100" step="10" value={heatmapSettings.velocity_bins}
+                          onChange={(e) => setHeatmapSettings({ ...heatmapSettings, velocity_bins: parseInt(e.target.value) })}
+                          className="w-full max-w-xs" />
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Gaussian Smoothing: {heatmapSettings.gaussian_sigma?.toFixed(1)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="3"
-                  step="0.5"
-                  value={heatmapSettings.gaussian_sigma}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      gaussian_sigma: parseFloat(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Sigma for Gaussian filter
-                </p>
-              </div>
-            </div>
+                {/* Activity Classification Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.activityClassification
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.activityClassification}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, activityClassification: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Activity Classification</span>
+                      <p className="text-xs text-gray-400">Pie chart showing moving vs stationary time</p>
+                    </div>
+                  </label>
+                </div>
 
-            <h4 className="font-medium text-gray-300 mb-3 mt-6">Velocity Analysis Parameters</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile
-                </label>
-                <input
-                  type="range"
-                  min="50"
-                  max="95"
-                  step="5"
-                  value={heatmapSettings.movement_threshold_percentile}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      movement_threshold_percentile: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Velocities above this percentile are considered "moving"
-                </p>
+                {/* No analysis selected warning */}
+                {!movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocityOverTime &&
+                 !movementAnalysisOptions.velocityDistribution && !movementAnalysisOptions.activityClassification && (
+                  <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded text-sm text-orange-200">
+                    Please select at least one analysis to run.
+                  </div>
+                )}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Velocity Histogram Bins: {heatmapSettings.velocity_bins}
-                </label>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  step="10"
-                  value={heatmapSettings.velocity_bins}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      velocity_bins: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Number of bins for velocity distribution
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Moving Average Window: {heatmapSettings.moving_average_window}
-                </label>
-                <input
-                  type="range"
-                  min="5"
-                  max="200"
-                  step="5"
-                  value={heatmapSettings.moving_average_window}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      moving_average_window: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Number of frames for velocity smoothing
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-gray-600/30 rounded p-3 mt-4">
-              <p className="text-xs text-gray-300">
-                <span className="font-semibold">Analyses performed:</span> Movement heatmap with trajectory overlay,
-                velocity over time, velocity distribution, activity classification (moving vs stationary)
-              </p>
-            </div>
-          </>
         )}
         </div>
         )}
@@ -1510,21 +1505,34 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   addLog(`Downloaded: ${baseName}_rearing.json`, 'success')
                 } else {
                   // Download movement analysis ZIP
-                  addLog('Generating download package...', 'info')
+                  const selectedCount = [
+                    movementAnalysisOptions.heatmap,
+                    movementAnalysisOptions.velocityOverTime,
+                    movementAnalysisOptions.velocityDistribution,
+                    movementAnalysisOptions.activityClassification
+                  ].filter(Boolean).length
+
+                  addLog(`Generating download package (${selectedCount} images)...`, 'info')
                   const response = await analysisApi.downloadCompleteAnalysis({
                     tracking_data: trackingData,
                     settings: heatmapSettings,
+                    options: {
+                      heatmap: movementAnalysisOptions.heatmap,
+                      velocity_over_time: movementAnalysisOptions.velocityOverTime,
+                      velocity_distribution: movementAnalysisOptions.velocityDistribution,
+                      activity_classification: movementAnalysisOptions.activityClassification,
+                    },
                   })
 
                   // Create download link for ZIP
                   const url = URL.createObjectURL(response.data)
                   const link = document.createElement('a')
                   link.href = url
-                  link.download = `complete_analysis_${new Date().getTime()}.zip`
+                  link.download = `movement_analysis_${new Date().getTime()}.zip`
                   link.click()
                   URL.revokeObjectURL(url)
 
-                  addLog('Downloaded ZIP with: 4 images + enhanced JSON with velocity data', 'success')
+                  addLog(`Downloaded ZIP with ${selectedCount} images`, 'success')
                 }
               } catch (error: any) {
                 addLog(`Download failed: ${error.message}`, 'error')

@@ -1,6 +1,6 @@
 """Analysis API endpoints"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 import numpy as np
 import matplotlib
@@ -26,6 +26,83 @@ from app.models.schemas import (
 router = APIRouter()
 TEMP_DIR = Path("temp/analysis")
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@router.get("/load-large-json")
+async def load_large_json(file_path: str):
+    """
+    Load a large JSON file directly from the server's disk.
+    This bypasses browser memory limits for very large tracking files.
+    """
+    try:
+        # Check if path is absolute or relative to project root
+        path = Path(file_path)
+        if not path.exists():
+            # Try relative to current directory
+            path = Path(os.getcwd()) / file_path
+
+        if not path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+
+        # Verify it's a JSON file
+        if not path.suffix.lower() == '.json':
+            raise HTTPException(status_code=400, detail="Only JSON files are supported")
+
+        # Check file size
+        file_size = path.stat().st_size
+        print(f"Loading large JSON: {path} ({file_size / 1024 / 1024:.2f} MB)")
+
+        # We use a stream or just read and return.
+        # For FastAPI, returning a large dict is fine as it's handled server-side.
+        with open(path, 'r') as f:
+            data = json.load(f)
+
+        return ApiResponse(success=True, data=data)
+
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
+    except Exception as e:
+        print(f"Error loading large JSON: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-large-json")
+async def upload_large_json(file: UploadFile = File(...)):
+    """
+    Upload a large JSON file via multipart form and process it server-side.
+    This handles large files that would crash the browser's JSON.parse.
+    """
+    try:
+        file_size = 0
+        # Save to temp file first to get size and enable streaming
+        temp_path = TEMP_DIR / f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file.filename}"
+
+        # Stream write to disk
+        with open(temp_path, 'wb') as out_file:
+            while content := await file.read(1024 * 1024):  # 1MB chunks
+                file_size += len(content)
+                out_file.write(content)
+
+        print(f"Uploaded large JSON: {temp_path} ({file_size / 1024 / 1024:.2f} MB)")
+
+        # Now parse the JSON from the temp file
+        with open(temp_path, 'r') as f:
+            data = json.load(f)
+
+        # Clean up temp file
+        temp_path.unlink()
+
+        return ApiResponse(success=True, data=data, message=f"Loaded {file_size / 1024 / 1024:.2f} MB")
+
+    except json.JSONDecodeError as e:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
+    except Exception as e:
+        print(f"Error uploading large JSON: {e}")
+        if temp_path.exists():
+            temp_path.unlink()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/heatmap")

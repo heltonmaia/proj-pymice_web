@@ -83,6 +83,56 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     }, 100)
   }
 
+  const [showLargeFileLoader, setShowLargeFileLoader] = useState(false)
+  const [serverFilePath, setServerFilePath] = useState('')
+
+  const handleServerFileLoad = async () => {
+    if (!serverFilePath.trim()) return
+
+    setIsAnalyzing(true)
+    addLog(`Requesting large JSON from server: ${serverFilePath}...`, 'info')
+
+    try {
+      const response = await analysisApi.loadLargeJson(serverFilePath)
+      if (response.data.success && response.data.data) {
+        const data = response.data.data as TrackingData
+        setTrackingData(data)
+        setJsonFileName(serverFilePath.split('/').pop() || 'Server File')
+
+        addLog('--- Tracking Sync Report (Server Load) ---', 'success')
+        addLog(`JSON file: ${serverFilePath}`, 'info')
+        addLog(`Tracking entries: ${data.tracking_data?.length || 0}`, 'info')
+        if (data.tracking_data && data.tracking_data.length > 0) {
+          addLog(`Max frame index: ${data.tracking_data[data.tracking_data.length - 1].frame_number}`, 'info')
+        }
+        if (data.video_info) {
+          addLog(`Declared in metadata: ${data.video_info.total_frames} frames @ ${data.video_info.fps} fps`, 'info')
+        }
+
+        // Update video info
+        if (videoInfo && data.video_info?.fps) {
+          const newFrames = Math.round(videoInfo.duration * data.video_info.fps)
+          setVideoInfo({
+            frames: newFrames,
+            duration: videoInfo.duration,
+            fps: data.video_info.fps
+          })
+        }
+
+        addLog('Large JSON loaded successfully from server!', 'success')
+        setShowLargeFileLoader(false)
+      } else {
+        addLog(`Server failed to load JSON: ${response.data.error}`, 'error')
+      }
+    } catch (error) {
+      addLog(`Error loading from server: ${(error as any).message}`, 'error')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+
   const handleTrackingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -99,13 +149,61 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     // Store JSON filename for later use
     setJsonFileName(file.name)
 
-    addLog(`Loading tracking data from ${file.name}...`, 'info')
-    const reader = new FileReader()
-    reader.onload = (event) => {
+    const fileSizeMB = file.size / 1024 / 1024
+    addLog(`Loading tracking data from ${file.name} (${fileSizeMB.toFixed(2)} MB)...`, 'info')
+
+    // For files > 50MB, use server-side processing to avoid browser memory issues
+    const LARGE_FILE_THRESHOLD = 50 * 1024 * 1024 // 50MB
+
+    const loadJson = async () => {
       try {
-        const data = JSON.parse(event.target?.result as string)
+        let data: TrackingData
+
+        if (file.size > LARGE_FILE_THRESHOLD) {
+          // Use server-side upload for large files
+          addLog(`Large file detected (${fileSizeMB.toFixed(0)} MB). Using server-side processing...`, 'info')
+          setUploadProgress(0)
+          setIsAnalyzing(true)
+
+          const response = await analysisApi.uploadLargeJson(file, (progress) => {
+            setUploadProgress(progress)
+            if (progress < 100) {
+              // Update log only at certain intervals to avoid spam
+              if (Math.floor(progress) % 10 === 0) {
+                addLog(`Uploading: ${Math.floor(progress)}%`, 'info')
+              }
+            }
+          })
+
+          setUploadProgress(null)
+          setIsAnalyzing(false)
+
+          if (response.data.success && response.data.data) {
+            data = response.data.data as TrackingData
+            addLog('Server-side processing complete!', 'success')
+          } else {
+            throw new Error(response.data.error || 'Server failed to process the file')
+          }
+        } else {
+          // For smaller files, use browser-side parsing
+          data = await new Response(file).json()
+        }
+
         setTrackingData(data)
-        addLog(`Tracking data loaded successfully: ${data.tracking_data?.length || 0} frames`, 'success')
+
+        // Detailed log following check_sync.py strategy
+        addLog('--- Tracking Sync Report ---', 'info')
+        addLog(`JSON file: ${file.name}`, 'info')
+        addLog(`Tracking entries: ${data.tracking_data?.length || 0}`, 'info')
+        if (data.tracking_data && data.tracking_data.length > 0) {
+          addLog(`Max frame index: ${data.tracking_data[data.tracking_data.length - 1].frame_number}`, 'info')
+        }
+        if (data.video_info) {
+          addLog(`Declared in metadata: ${data.video_info.total_frames} frames @ ${data.video_info.fps} fps`, 'info')
+        }
+        if (data.statistics) {
+          addLog(`Statistics: ${data.statistics.yolo_detections} YOLO, ${data.statistics.template_detections} Template`, 'info')
+        }
 
         // Update video info with correct FPS from JSON if video is already loaded
         if (videoInfo && data.video_info?.fps) {
@@ -115,8 +213,15 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             duration: videoInfo.duration,
             fps: data.video_info.fps
           })
-          addLog(`Updated video frame count with JSON fps: ${newFrames} frames @ ${data.video_info.fps} fps`, 'info')
+          addLog(`Updated video estimation with JSON fps: ${newFrames} frames @ ${data.video_info.fps} fps`, 'info')
+
+          if (Math.abs((data.tracking_data?.length || 0) - newFrames) > 2) {
+            addLog(`WARNING: Frame mismatch detected! Difference: ${Math.abs((data.tracking_data?.length || 0) - newFrames)} frames`, 'error')
+          } else {
+            addLog('SUCCESS: Video and JSON frames match perfectly.', 'success')
+          }
         }
+        addLog('---------------------------', 'info')
 
         // Detect analysis type for rearing - search first 100 frames for data
         let detectedType: 'segmentation' | 'pose' | null = null
@@ -138,14 +243,24 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
         if (detectedType) {
           setRearingAnalysisType(detectedType)
         } else {
-          addLog('Warning: No mask or keypoints detected in first 100 frames', 'warning')
+          addLog('Warning: No mask or keypoints detected in first 100 frames', 'info')
         }
       } catch (error) {
         console.error('Failed to parse tracking data:', error)
+        setUploadProgress(null)
+        setIsAnalyzing(false)
         addLog('Failed to parse tracking data: ' + (error as Error).message, 'error')
+
+        // Suggest server-side option for large files
+        if (file.size > LARGE_FILE_THRESHOLD) {
+          addLog('The server-side upload also failed. Try using "Load Large File (Server)" with a file path.', 'error')
+        } else if (file.size > 50 * 1024 * 1024) {
+          addLog('Tip: This file is large. Try using "Load Large File (Server)" option.', 'error')
+        }
       }
     }
-    reader.readAsText(file)
+
+    loadJson()
   }
 
   // Load first frame from video for ROI drawing
@@ -732,39 +847,109 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Tracking Data (JSON)
-            </label>
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleTrackingFileUpload}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
-            />
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                Tracking Data (JSON)
+              </label>
+              <button 
+                onClick={() => setShowLargeFileLoader(!showLargeFileLoader)}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                {showLargeFileLoader ? 'Standard Upload' : 'Load Large File (Server)'}
+              </button>
+            </div>
+            
+            {showLargeFileLoader ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Paste full path to JSON file on server..."
+                  value={serverFilePath}
+                  onChange={(e) => setServerFilePath(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm"
+                />
+                <button
+                  onClick={handleServerFileLoad}
+                  disabled={isAnalyzing || !serverFilePath.trim()}
+                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  {isAnalyzing ? 'Loading Large JSON...' : 'Load from Disk'}
+                </button>
+                <p className="text-[10px] text-gray-400">
+                  Tip: Use this for files &gt; 100MB to avoid browser memory errors.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleTrackingFileUpload}
+                  disabled={uploadProgress !== null}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+                />
+                {uploadProgress !== null && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Uploading to server...</span>
+                      <span>{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-400">
+                  Files &gt; 50MB are automatically processed server-side.
+                </p>
+              </div>
+            )}
+            
             {trackingData && (
               <div className="mt-2 space-y-1">
                 <p className="text-sm text-green-400">
                   ✓ {jsonFileName}
                 </p>
                 <p className="text-xs text-gray-400">
-                  • JSON: {trackingData.tracking_data?.length || 0} frames
+                  • JSON: {trackingData.tracking_data?.length || 0} entries 
+                  {trackingData.video_info?.total_frames && ` (Declared: ${trackingData.video_info.total_frames})`}
                 </p>
+                {trackingData.tracking_data && trackingData.tracking_data.length > 0 && (
+                  <p className="text-xs text-gray-400">
+                    • Max Index: {trackingData.tracking_data[trackingData.tracking_data.length - 1].frame_number}
+                  </p>
+                )}
                 {rearingAnalysisType && (
                   <p className="text-xs text-gray-400">
                     • {rearingAnalysisType === 'segmentation' ? 'Segmentation' : 'Pose'} detected
                   </p>
                 )}
                 {videoInfo && videoFile && (
-                  <p className={`text-xs font-medium ${
+                  <div className={`mt-1 p-2 rounded text-xs font-medium ${
                     Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
-                      ? 'text-green-400'
-                      : 'text-orange-400'
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                      : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
                   }`}>
                     {Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
-                      ? '✓ Frame count matches video'
-                      : `⚠ Frame mismatch: ${Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames)} frames difference`
+                      ? '✓ Synchronization OK: Video and JSON match'
+                      : (
+                        <div className="space-y-1">
+                          <p className="font-bold">⚠ Synchronization Mismatch!</p>
+                          <p>• Video: ~{videoInfo.frames} frames</p>
+                          <p>• JSON entries: {trackingData.tracking_data?.length || 0}</p>
+                          {trackingData.video_info?.total_frames && (
+                            <p>• JSON metadata: {trackingData.video_info.total_frames}</p>
+                          )}
+                          <p className="pt-1 text-[10px] opacity-80 uppercase tracking-wider">
+                            Difference: {Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames)} frames
+                          </p>
+                        </div>
+                      )
                     }
-                  </p>
+                  </div>
                 )}
               </div>
             )}

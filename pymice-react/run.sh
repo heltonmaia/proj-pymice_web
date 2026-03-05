@@ -52,6 +52,28 @@ check_status() {
     echo "$backend_running $frontend_running"
 }
 
+# Limpar temporários
+clean_temporaries() {
+    echo -e "${YELLOW}🧹 Realizando limpeza seletiva...${NC}"
+    
+    # 1. Limpar __pycache__ e arquivos .pyc no backend
+    find backend -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    find backend -name "*.pyc" -delete 2>/dev/null || true
+
+    # 2. Limpar pastas de dados temporários (EXCETO models)
+    CLEANUP_DIRS=("backend/temp/videos" "backend/temp/tracking" "backend/temp/analysis" "logs")
+    for dir in "${CLEANUP_DIRS[@]}"; do
+        if [ -d "$dir" ]; then
+            echo -e "   Limpando: ${dir}..."
+            rm -rf "$dir"/* 2>/dev/null || true
+        else
+            mkdir -p "$dir"
+        fi
+    done
+
+    echo -e "${GREEN}✅ Limpeza concluída (Pesos em 'backend/temp/models' preservados).${NC}"
+}
+
 # Mostrar status
 show_status() {
     show_banner
@@ -99,6 +121,8 @@ show_status() {
 # Iniciar serviços
 start_services() {
     show_banner
+
+    clean_temporaries
 
     echo -e "${GREEN}🚀 Iniciando PyMice Web...${NC}\n"
 
@@ -317,6 +341,7 @@ show_menu() {
         echo -e "  ${YELLOW}4)${NC} 📊 Ver Status"
         echo -e "  ${YELLOW}5)${NC} 📝 Ver Logs do Backend"
         echo -e "  ${YELLOW}6)${NC} 📝 Ver Logs do Frontend"
+        echo -e "  ${YELLOW}7)${NC} 🧹 Limpar Temporários"
         echo -e "  ${YELLOW}0)${NC} ❌ Sair"
         echo ""
         echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
@@ -348,6 +373,10 @@ show_menu() {
             6)
                 show_logs "frontend"
                 ;;
+            7)
+                clean_temporaries
+                read -p "Pressione Enter para voltar ao menu..."
+                ;;
             0)
                 clear
                 echo -e "${CYAN}Até logo!${NC}"
@@ -374,6 +403,9 @@ case "${1:-}" in
         ;;
     status)
         show_status
+        ;;
+    clean)
+        clean_temporaries
         ;;
     logs)
         if [ -n "$2" ]; then

@@ -1012,7 +1012,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
   }
 
   const handleAddFullFrameROI = () => {
-    const newROI: FullFrameROI = {
+    // If we already have a full frame ROI, don't add another one
+    if (rois.some(roi => roi.roi_type === 'FullFrame')) {
+      return
+    }
+
+    const newROI: ROI = {
       roi_type: 'FullFrame',
       center_x: 0,
       center_y: 0,
@@ -1240,7 +1245,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             </label>
             <select
               value={currentROIType}
-              onChange={(e) => setCurrentROIType(e.target.value as ROIType)}
+              onChange={(e) => {
+                const type = e.target.value as ROIType
+                setCurrentROIType(type)
+                if (type === 'FullFrame') {
+                  handleAddFullFrameROI()
+                }
+              }}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
             >
               <option value="Rectangle">Rectangle</option>
@@ -1798,12 +1809,6 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           )}
           {!trackingFrameUrl && (
             <>
-              <button
-                onClick={handleAddFullFrameROI}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"
-              >
-                Add Full Frame
-              </button>
               <button
                 onClick={() => setRois([])}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"

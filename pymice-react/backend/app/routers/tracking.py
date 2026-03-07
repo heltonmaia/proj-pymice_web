@@ -7,6 +7,7 @@ import shutil
 import uuid
 import json
 import io
+import gc
 import cv2
 import numpy as np
 import torch
@@ -27,7 +28,15 @@ from app.processing.tracking import (
     calculate_background,
     draw_rois,
     get_roi_containing_point,
+    get_gpu_memory_info,
+    cleanup_gpu_memory,
 )
+
+# GPU memory threshold (percentage) - will cleanup if above this
+GPU_MEMORY_THRESHOLD = 80.0
+
+# Minimum free GPU memory in GB before forcing cleanup
+MIN_FREE_GPU_MEMORY_GB = 1.0
 
 router = APIRouter()
 
@@ -141,10 +150,17 @@ async def upload_model(file: UploadFile = File(...)):
 
 def run_tracking_task(task_id: str, request: TrackingRequest):
     """Background task to run YOLO tracking"""
+    model = None  # Track model for cleanup
+    cap = None    # Track video capture for cleanup
+
     try:
         # Detect GPU availability
         if torch.cuda.is_available():
             device = "cuda"
+            # Initial GPU cleanup before starting
+            cleanup_gpu_memory(force=True)
+            mem_info = get_gpu_memory_info()
+            print(f"GPU Memory at start: {mem_info['used']:.2f}GB used / {mem_info['total']:.2f}GB total ({mem_info['utilization']:.1f}%)")
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             device = "mps"
         else:
@@ -160,14 +176,28 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             "device": device,
         }
 
-        # Load YOLO model
+        # Load YOLO model with memory-efficient settings
         model_path = os.path.join(MODEL_DIR, request.model_name)
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {request.model_name}")
 
         model = YOLO(model_path)
         if device == "cuda":
+            # Set CUDA memory allocation settings for better memory management
+            # This helps prevent memory fragmentation
+            if hasattr(torch.cuda, 'set_per_process_memory_fraction'):
+                try:
+                    # Limit to 90% of GPU memory to leave headroom
+                    torch.cuda.set_per_process_memory_fraction(0.9)
+                except Exception as e:
+                    print(f"Could not set memory fraction: {e}")
+
             model.to("cuda")
+
+            # Log memory after model load
+            mem_info = get_gpu_memory_info()
+            print(f"GPU Memory after model load: {mem_info['used']:.2f}GB used ({mem_info['utilization']:.1f}%)")
+
         elif device == "mps":
             model.to("mps")
 
@@ -184,6 +214,16 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
+
+        if total_frames <= 0:
+            print(f"Warning: cap.get(CAP_PROP_FRAME_COUNT) returned 0. Trying to count frames manually...")
+            # Try to get total frames by seeking to end if count is 0
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 1e9)
+            total_frames = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # Reset to beginning
+            
+            if total_frames <= 0:
+                raise RuntimeError("Failed to determine video frame count")
 
         # Get video info using ffprobe
         video_info = get_video_info_ffprobe(video_path)
@@ -224,6 +264,9 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
 
         frame_number = 0
 
+        # Memory monitoring interval (check every N frames)
+        memory_check_interval = 100
+
         while True:
             if tracking_tasks[task_id].get("stopped"):
                 break
@@ -231,6 +274,15 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             ret, frame = cap.read()
             if not ret:
                 break
+
+            # Check GPU memory periodically and cleanup if needed
+            if device == "cuda" and frame_number % memory_check_interval == 0:
+                mem_info = get_gpu_memory_info()
+                if mem_info['utilization'] > GPU_MEMORY_THRESHOLD or mem_info['free'] < MIN_FREE_GPU_MEMORY_GB:
+                    print(f"Frame {frame_number}: High GPU memory usage ({mem_info['utilization']:.1f}%), cleaning up...")
+                    cleanup_gpu_memory(force=True)
+                    mem_after = get_gpu_memory_info()
+                    print(f"After cleanup: {mem_after['utilization']:.1f}% used")
 
             # Get frame timestamp in seconds from video capture
             timestamp_sec = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
@@ -343,11 +395,18 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             })
 
         cap.release()
+        cap = None
 
-        # Clean up GPU memory
+        # Thorough GPU memory cleanup
         if device == "cuda":
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
+            # Delete model to free GPU memory
+            del model
+            model = None
+            cleanup_gpu_memory(force=True)
+            gc.collect()
+
+            mem_info = get_gpu_memory_info()
+            print(f"GPU Memory after cleanup: {mem_info['used']:.2f}GB used ({mem_info['utilization']:.1f}%)")
 
         # Save results
         results = {
@@ -388,11 +447,36 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
         print(f"Tracking completed: {yolo_detections} YOLO, {template_detections} template, {no_detection_count} no detection")
 
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
         print(f"Tracking error: {e}")
+        print(f"Full traceback: {error_traceback}")
         tracking_tasks[task_id].update({
             "status": "error",
             "error": str(e),
         })
+    finally:
+        # Always cleanup resources to prevent memory leaks
+        try:
+            if cap is not None:
+                cap.release()
+        except Exception:
+            pass
+
+        try:
+            if model is not None:
+                del model
+        except Exception:
+            pass
+
+        # Final GPU cleanup
+        if torch.cuda.is_available():
+            try:
+                cleanup_gpu_memory(force=True)
+                gc.collect()
+                print("Final GPU memory cleanup completed")
+            except Exception as cleanup_error:
+                print(f"Error during final cleanup: {cleanup_error}")
 
 
 @router.post("/start")
@@ -428,7 +512,8 @@ async def get_progress(task_id: str):
             total_frames=task.get("total_frames", 0),
             percentage=task.get("percentage", 0),
             status=task.get("status", "processing"),
-            device=task.get("device")
+            device=task.get("device"),
+            error=task.get("error")
         ).model_dump()
     )
 

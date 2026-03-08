@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Play, Pause, SkipBack, SkipForward, Eye, Settings, X } from 'lucide-react'
+import { Upload, Play, Pause, SkipBack, SkipForward, Eye, Settings, X, Loader2 } from 'lucide-react'
 import type { TrackingData, ROI } from '@/types'
+import { analysisApi } from '@/services/api'
 
 interface VisualizarResultadosTabProps {
   onTrackingStateChange?: (isTracking: boolean) => void
@@ -10,9 +11,16 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null)
+  const [jsonFileName, setJsonFileName] = useState<string>('')
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentFrame, setCurrentFrame] = useState(0)
   const [fps, setFps] = useState(30)
+
+  // Large file handling states
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [showLargeFileLoader, setShowLargeFileLoader] = useState(false)
+  const [serverFilePath, setServerFilePath] = useState('')
 
   // Visualization options
   const [showKeypoints, setShowKeypoints] = useState(true)
@@ -53,37 +61,108 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
     e.target.value = ''
   }
 
+  // Handle tracking data sync with video
+  const updateSyncStatus = (data: TrackingData) => {
+    // Detect available features
+    const firstFrame = data.tracking_data?.[0]
+    setHasKeypoints(!!firstFrame?.keypoints && firstFrame.keypoints.length > 0)
+    setHasMask(!!firstFrame?.mask && firstFrame.mask.length > 0)
+    setHasROIs(!!data.rois && data.rois.length > 0)
+    setHasRearingAnalysis(!!(data as any).rearing_analysis && !!(data as any).rearing_analysis.rois)
+    
+    if (data.video_info?.fps) {
+      setFps(data.video_info.fps)
+    }
+  }
+
+  // Handle server file load
+  const handleServerFileLoad = async () => {
+    if (!serverFilePath.trim()) return
+
+    setIsAnalyzing(true)
+    try {
+      const response = await analysisApi.loadLargeJson(serverFilePath)
+      if (response.data.success && response.data.data) {
+        const data = response.data.data as TrackingData
+        setTrackingData(data)
+        setJsonFileName(serverFilePath.split('/').pop() || 'Server File')
+        
+        setCurrentFrame(0)
+        setIsPlaying(false)
+        updateSyncStatus(data)
+        
+        setShowLargeFileLoader(false)
+      } else {
+        alert(`Server failed to load JSON: ${response.data.error}`)
+      }
+    } catch (error: any) {
+      alert(`Error loading from server: ${error.message}`)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
   // Handle JSON file upload
-  const handleJsonUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleJsonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      try {
-        const data = JSON.parse(event.target?.result as string)
+    setJsonFileName(file.name)
 
-        // Reset states before loading new data
-        setCurrentFrame(0)
-        setIsPlaying(false)
+    const LARGE_FILE_THRESHOLD = 50 * 1024 * 1024 // 50MB
 
-        setTrackingData(data)
-        if (data.video_info?.fps) {
-          setFps(data.video_info.fps)
+    try {
+      let data: TrackingData
+
+      if (file.size > LARGE_FILE_THRESHOLD) {
+        // Use server-side upload for large files
+        setUploadProgress(0)
+        setIsAnalyzing(true)
+
+        const response = await analysisApi.uploadLargeJson(file, (progress) => {
+          setUploadProgress(progress)
+        })
+
+        setUploadProgress(null)
+        setIsAnalyzing(false)
+
+        if (response.data.success && response.data.data) {
+          data = response.data.data as TrackingData
+        } else {
+          throw new Error(response.data.error || 'Server failed to process the file')
         }
+      } else {
+        // For smaller files, use browser-side parsing
+        const reader = new FileReader()
+        data = await new Promise((resolve, reject) => {
+          reader.onload = (event) => {
+            try {
+              resolve(JSON.parse(event.target?.result as string))
+            } catch (err) {
+              reject(err)
+            }
+          }
+          reader.onerror = () => reject(new Error('Failed to read file'))
+          reader.readAsText(file)
+        })
+      }
 
-        // Detect available features
-        const firstFrame = data.tracking_data?.[0]
-        setHasKeypoints(!!firstFrame?.keypoints && firstFrame.keypoints.length > 0)
-        setHasMask(!!firstFrame?.mask && firstFrame.mask.length > 0)
-        setHasROIs(!!data.rois && data.rois.length > 0)
-        setHasRearingAnalysis(!!(data as any).rearing_analysis && !!(data as any).rearing_analysis.rois)
-      } catch (error) {
-        console.error('Failed to parse tracking data:', error)
-        alert('Error loading JSON file: ' + (error as Error).message)
+      // Reset states before loading new data
+      setCurrentFrame(0)
+      setIsPlaying(false)
+      setTrackingData(data)
+      updateSyncStatus(data)
+
+    } catch (error: any) {
+      console.error('Failed to parse tracking data:', error)
+      setUploadProgress(null)
+      setIsAnalyzing(false)
+      alert('Failed to parse tracking data: ' + error.message)
+      
+      if (file.size > LARGE_FILE_THRESHOLD) {
+        alert('Tip: The server-side upload failed. Try using "Load Large File (Server)" with the full path if the file is already on the server.')
       }
     }
-    reader.readAsText(file)
 
     // Reset input to allow same file selection
     e.target.value = ''
@@ -131,6 +210,41 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
     ctx.setLineDash([])
   }
 
+  // Handle manual centroid correction
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!trackingData || isPlaying) return
+
+    const canvas = canvasRef.current
+    const video = videoRef.current
+    if (!canvas || !video) return
+
+    const rect = canvas.getBoundingClientRect()
+    
+    // Calculate click position relative to the canvas/video display size
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    // Scale coordinates to the actual video dimensions
+    const scaleX = video.videoWidth / rect.width
+    const scaleY = video.videoHeight / rect.height
+    
+    const actualX = x * scaleX
+    const actualY = y * scaleY
+
+    // Update tracking data in state
+    const newData = { ...trackingData }
+    if (newData.tracking_data[currentFrame]) {
+      newData.tracking_data[currentFrame] = {
+        ...newData.tracking_data[currentFrame],
+        centroid_x: actualX,
+        centroid_y: actualY,
+        detection_method: 'manual',
+        confidence: 1.0 // Manual is 100% "confident"
+      }
+      setTrackingData(newData)
+    }
+  }
+
   // Draw tracking overlay on canvas
   const drawTrackingOverlay = () => {
     const canvas = canvasRef.current
@@ -140,26 +254,35 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Set canvas size to match video only if changed (avoid unnecessary clears)
+    // Set canvas size to match video only if changed
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
     } else {
-      // Clear canvas only
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
 
-    // Draw ROIs first (background layer)
+    // Get tracking data for current frame
+    const frameData = trackingData.tracking_data?.[currentFrame]
+    if (!frameData) return
+
+    // Define colors based on method
+    let primaryColor = '#00ff00' // YOLO
+    if (frameData.detection_method === 'template') primaryColor = '#ffff00'
+    if (frameData.detection_method === 'manual') primaryColor = '#ff9800' // Orange for manual
+    if (frameData.detection_method === 'none') primaryColor = '#f44336'
+
+    // Draw ROIs first
     if (showROIs && trackingData.rois && trackingData.rois.length > 0) {
       trackingData.rois.forEach((roi, index) => {
         drawROI(ctx, roi, index)
       })
     }
 
-    // Draw trajectory trail (before current frame)
+    // Draw trajectory trail
     if (showTrajectory) {
       const trailLength = 30
-      ctx.strokeStyle = 'rgba(255, 100, 100, 0.6)'
+      ctx.strokeStyle = 'rgba(255, 100, 100, 0.4)'
       ctx.lineWidth = 2
       ctx.beginPath()
 
@@ -167,28 +290,21 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
       for (let i = Math.max(0, currentFrame - trailLength); i <= currentFrame; i++) {
         const frame = trackingData.tracking_data?.[i]
         if (frame && frame.detection_method !== 'none') {
-          const centerX = frame.centroid_x
-          const centerY = frame.centroid_y
-
           if (!started) {
-            ctx.moveTo(centerX, centerY)
+            ctx.moveTo(frame.centroid_x, frame.centroid_y)
             started = true
           } else {
-            ctx.lineTo(centerX, centerY)
+            ctx.lineTo(frame.centroid_x, frame.centroid_y)
           }
         }
       }
       ctx.stroke()
     }
 
-    // Get tracking data for current frame
-    const frameData = trackingData.tracking_data?.[currentFrame]
-    if (!frameData) return
-
-    // Draw mask (segmentation)
+    // Draw mask (segmentation) - Now uses the primary color of the method
     if (showMask && frameData.mask && frameData.mask.length > 0) {
-      ctx.fillStyle = 'rgba(255, 0, 255, 0.3)'
-      ctx.strokeStyle = 'rgba(255, 0, 255, 0.8)'
+      ctx.fillStyle = primaryColor + '4D' // 30% alpha
+      ctx.strokeStyle = primaryColor
       ctx.lineWidth = 2
 
       ctx.beginPath()
@@ -204,34 +320,20 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
     // Draw bounding box if detection exists
     if (frameData.detection_method !== 'none' && frameData.bbox) {
       const [x, y, w, h] = frameData.bbox
-
-      // Set color based on detection method
-      const color = frameData.detection_method === 'yolo' ? '#00ff00' : '#ffff00'
-
-      // Draw bounding box
-      ctx.strokeStyle = color
-      ctx.lineWidth = 3
+      ctx.strokeStyle = primaryColor
+      ctx.lineWidth = 2
       ctx.strokeRect(x, y, w, h)
-
-      // Draw label
-      ctx.fillStyle = color
-      ctx.font = '16px monospace'
-      const label = `Frame ${currentFrame} - ${frameData.detection_method.toUpperCase()}`
-      ctx.fillText(label, x, y - 10)
-
-      // Draw confidence if available
-      if (frameData.confidence !== undefined) {
-        ctx.fillText(`Conf: ${(frameData.confidence * 100).toFixed(1)}%`, x, y + h + 20)
-      }
     }
 
     // Draw centroid
     if (showCentroid && frameData.detection_method !== 'none') {
-      const color = frameData.detection_method === 'yolo' ? '#00ff00' : '#ffff00'
-      ctx.fillStyle = color
+      ctx.fillStyle = primaryColor
       ctx.beginPath()
-      ctx.arc(frameData.centroid_x, frameData.centroid_y, 5, 0, 2 * Math.PI)
+      ctx.arc(frameData.centroid_x, frameData.centroid_y, 6, 0, 2 * Math.PI)
       ctx.fill()
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.stroke()
     }
 
     // Draw keypoints (pose)
@@ -422,15 +524,33 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
             <Eye className="w-5 h-5 text-primary-500" />
             View Results
           </h2>
-          {(videoFile || trackingData) && (
-            <button
-              onClick={handleClearAll}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Clear All
-            </button>
-          )}
+          <div className="flex gap-2">
+            {trackingData && (
+              <button
+                onClick={() => {
+                  const blob = new Blob([JSON.stringify(trackingData, null, 2)], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.download = jsonFileName ? jsonFileName.replace('.json', '_corrected.json') : 'results_corrected.json'
+                  link.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                Download Corrected Results
+              </button>
+            )}
+            {(videoFile || trackingData) && (
+              <button
+                onClick={handleClearAll}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         <p className="text-gray-400 mb-6">
@@ -456,20 +576,81 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              <Upload className="w-4 h-4 inline mr-2" />
-              JSON File (Tracking Data)
-            </label>
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleJsonUpload}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
-            />
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                <Upload className="w-4 h-4 inline mr-2" />
+                JSON File (Tracking Data)
+              </label>
+              <button 
+                onClick={() => setShowLargeFileLoader(!showLargeFileLoader)}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                {showLargeFileLoader ? 'Standard Upload' : 'Load Large File (Server)'}
+              </button>
+            </div>
+
+            {showLargeFileLoader ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Paste full path to JSON file on server..."
+                  value={serverFilePath}
+                  onChange={(e) => setServerFilePath(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm"
+                />
+                <button
+                  onClick={handleServerFileLoad}
+                  disabled={isAnalyzing || !serverFilePath.trim()}
+                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading Large JSON...
+                    </>
+                  ) : 'Load from Disk'}
+                </button>
+                <p className="text-[10px] text-gray-400">
+                  Tip: Use this for files &gt; 100MB to avoid browser memory errors.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleJsonUpload}
+                  disabled={isAnalyzing}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+                />
+                {uploadProgress !== null && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Uploading to server...</span>
+                      <span>{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-400">
+                  Files &gt; 50MB are automatically processed server-side.
+                </p>
+              </div>
+            )}
+
             {trackingData && (
               <div className="mt-2 space-y-1">
                 <p className="text-sm text-green-400">
-                  ✓ {trackingData.tracking_data?.length || 0} frames loaded
+                  ✓ {jsonFileName || 'Data Loaded'}
+                </p>
+                <p className="text-xs text-gray-400">
+                  • JSON: {trackingData.tracking_data?.length || 0} entries 
+                  {trackingData.video_info?.total_frames && ` (Declared: ${trackingData.video_info.total_frames})`}
                 </p>
                 <div className="text-xs text-gray-400">
                   {hasKeypoints && <span className="inline-block mr-3">• Pose detected</span>}
@@ -589,10 +770,16 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                 />
                 <canvas
                   ref={canvasRef}
-                  className="w-full h-full object-contain pointer-events-none"
+                  onClick={handleCanvasClick}
+                  className={`w-full h-full object-contain ${!isPlaying && trackingData ? 'cursor-crosshair' : ''}`}
                   style={{ position: 'absolute', top: 0, left: 0 }}
                 />
               </div>
+              {!isPlaying && trackingData && (
+                <div className="absolute top-4 left-4 bg-primary-600/80 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm pointer-events-none">
+                  Click to manually fix centroid
+                </div>
+              )}
             </div>
 
             {/* Video Controls */}

@@ -14,7 +14,7 @@ const tabs = [
   { id: 'tracking', label: 'Tracking', icon: Target, component: TrackingTab },
   { id: 'ethological', label: 'Ethological Analysis', icon: BarChart3, component: EthologicalTab },
   { id: 'irl', label: 'IRL Analysis', icon: Globe, component: IRLTab },
-  { id: 'visualizar', label: 'View Results', icon: Eye, component: VisualizarResultadosTab },
+  { id: 'visualizar', label: 'View and Fix results', icon: Eye, component: VisualizarResultadosTab },
   { id: 'extra', label: 'Extra Tools', icon: Wrench, component: ExtraToolsTab },
 ]
 

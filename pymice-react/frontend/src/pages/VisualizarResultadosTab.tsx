@@ -522,7 +522,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Eye className="w-5 h-5 text-primary-500" />
-            View Results
+            View and Fix results
           </h2>
           <div className="flex gap-2">
             {trackingData && (

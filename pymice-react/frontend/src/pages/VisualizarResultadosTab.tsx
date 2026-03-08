@@ -19,6 +19,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
   // Large file handling states
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [showLargeFileLoader, setShowLargeFileLoader] = useState(false)
   const [serverFilePath, setServerFilePath] = useState('')
 
@@ -532,24 +533,50 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
           <div className="flex gap-2">
             {trackingData && (
               <button
+                disabled={isDownloading || isAnalyzing}
                 onClick={() => {
-                  const blob = new Blob([JSON.stringify(trackingData, null, 2)], { type: 'application/json' })
-                  const url = URL.createObjectURL(blob)
-                  const link = document.createElement('a')
-                  link.href = url
-                  link.download = jsonFileName ? jsonFileName.replace('.json', '_corrected.json') : 'results_corrected.json'
-                  link.click()
-                  URL.revokeObjectURL(url)
+                  setIsDownloading(true)
+                  // Small delay to allow UI to update before heavy JSON processing
+                  setTimeout(() => {
+                    try {
+                      // Remove indentation for large files to save memory (roughly cuts size in half)
+                      const isLargeFile = trackingData.tracking_data && trackingData.tracking_data.length > 50000
+                      const jsonString = isLargeFile 
+                        ? JSON.stringify(trackingData) 
+                        : JSON.stringify(trackingData, null, 2)
+                        
+                      const blob = new Blob([jsonString], { type: 'application/json' })
+                      const url = URL.createObjectURL(blob)
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = jsonFileName ? jsonFileName.replace('.json', '_fixed.json') : 'results_fixed.json'
+                      link.click()
+                      URL.revokeObjectURL(url)
+                    } catch (error) {
+                      console.error('Download error:', error)
+                      alert('Error preparing download. The file is too large for the browser to process at once. Try downloading a smaller segment if possible.')
+                    } finally {
+                      setIsDownloading(false)
+                    }
+                  }, 100)
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
-                Download Corrected Results
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Preparing Download...
+                  </>
+                ) : (
+                  'Download Fixed Results'
+                )}
               </button>
             )}
             {(videoFile || trackingData) && (
               <button
                 onClick={handleClearAll}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                disabled={isDownloading || isAnalyzing || uploadProgress !== null}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <X className="w-4 h-4" />
                 Clear All
@@ -573,7 +600,8 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
               type="file"
               accept="video/*"
               onChange={handleVideoUpload}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
+              disabled={isDownloading || isAnalyzing || uploadProgress !== null}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
             />
             {videoFile && (
               <p className="text-sm text-green-400 mt-2">✓ {videoFile.name}</p>
@@ -588,7 +616,8 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
               </label>
               <button 
                 onClick={() => setShowLargeFileLoader(!showLargeFileLoader)}
-                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                disabled={isDownloading || isAnalyzing}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors disabled:opacity-50"
               >
                 {showLargeFileLoader ? 'Standard Upload' : 'Load Large File (Server)'}
               </button>
@@ -625,7 +654,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   type="file"
                   accept=".json"
                   onChange={handleJsonUpload}
-                  disabled={isAnalyzing}
+                  disabled={isDownloading || isAnalyzing || uploadProgress !== null}
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
                 />
                 {uploadProgress !== null && (
@@ -681,52 +710,53 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   type="checkbox"
                   checked={showCentroid}
                   onChange={(e) => setShowCentroid(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                  disabled={isDownloading || isAnalyzing}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-300">Centroid</span>
               </label>
 
               <label
                 className={`flex items-center gap-2 p-2 rounded transition-colors ${
-                  hasKeypoints ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
+                  hasKeypoints && !isDownloading && !isAnalyzing ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={showKeypoints}
                   onChange={(e) => setShowKeypoints(e.target.checked)}
-                  disabled={!hasKeypoints}
-                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                  disabled={!hasKeypoints || isDownloading || isAnalyzing}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-300">Pose (Keypoints)</span>
               </label>
 
               <label
                 className={`flex items-center gap-2 p-2 rounded transition-colors ${
-                  hasMask ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
+                  hasMask && !isDownloading && !isAnalyzing ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={showMask}
                   onChange={(e) => setShowMask(e.target.checked)}
-                  disabled={!hasMask}
-                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                  disabled={!hasMask || isDownloading || isAnalyzing}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-300">Mask</span>
               </label>
 
               <label
                 className={`flex items-center gap-2 p-2 rounded transition-colors ${
-                  hasROIs ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
+                  hasROIs && !isDownloading && !isAnalyzing ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={showROIs}
                   onChange={(e) => setShowROIs(e.target.checked)}
-                  disabled={!hasROIs}
-                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                  disabled={!hasROIs || isDownloading || isAnalyzing}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-300">ROIs</span>
               </label>
@@ -736,22 +766,23 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   type="checkbox"
                   checked={showTrajectory}
                   onChange={(e) => setShowTrajectory(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                  disabled={isDownloading || isAnalyzing}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-300">Trajectory</span>
               </label>
 
               <label
                 className={`flex items-center gap-2 p-2 rounded transition-colors ${
-                  hasRearingAnalysis ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
+                  hasRearingAnalysis && !isDownloading && !isAnalyzing ? 'cursor-pointer hover:bg-gray-600/30' : 'opacity-50 cursor-not-allowed'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={showRearingROIs}
                   onChange={(e) => setShowRearingROIs(e.target.checked)}
-                  disabled={!hasRearingAnalysis}
-                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
+                  disabled={!hasRearingAnalysis || isDownloading || isAnalyzing}
+                  className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
                 <span className="text-sm text-gray-300">Rearing ROIs</span>
               </label>
@@ -793,10 +824,10 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                 <button
                   onClick={skipBackward}
                   className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2 text-sm"
-                  title="Anterior frame"
+                  title="Previous frame"
                 >
                   <SkipBack className="w-4 h-4" />
-                  <span>Anterior Frame</span>
+                  <span>Previous Frame</span>
                 </button>
 
                 <div className="mx-2 flex items-center gap-2">
@@ -815,9 +846,9 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                 <button
                   onClick={skipForward}
                   className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2 text-sm"
-                  title="Próximo frame"
+                  title="Next frame"
                 >
-                  <span>Próximo Frame</span>
+                  <span>Next Frame</span>
                   <SkipForward className="w-4 h-4" />
                 </button>
               </div>
@@ -843,12 +874,13 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   max={videoRef.current.duration || 0}
                   step="0.01"
                   value={videoRef.current.currentTime || 0}
+                  disabled={isDownloading || isAnalyzing || uploadProgress !== null}
                   onChange={(e) => {
                     if (videoRef.current) {
                       videoRef.current.currentTime = parseFloat(e.target.value)
                     }
                   }}
-                  className="w-full mt-4"
+                  className="w-full mt-4 disabled:opacity-50"
                 />
               )}
             </div>

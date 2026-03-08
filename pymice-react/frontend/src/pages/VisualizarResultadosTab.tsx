@@ -474,17 +474,22 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
   // Skip forward one frame
   const skipForward = () => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || !trackingData) return
 
-    video.currentTime = Math.min(video.currentTime + 1 / fps, video.duration)
+    const maxFrame = (trackingData.video_info?.total_frames || trackingData.tracking_data?.length || 0) - 1
+    if (currentFrame >= maxFrame) return
+
+    video.currentTime = (currentFrame + 1) / fps
   }
 
   // Skip backward one frame
   const skipBackward = () => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || !trackingData) return
 
-    video.currentTime = Math.max(video.currentTime - 1 / fps, 0)
+    if (currentFrame <= 0) return
+
+    video.currentTime = (currentFrame - 1) / fps
   }
 
   // Clean up video URL on unmount
@@ -784,32 +789,36 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
             {/* Video Controls */}
             <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center justify-center gap-4 mb-4">
+              <div className="flex items-center justify-center gap-2 mb-4">
                 <button
                   onClick={skipBackward}
-                  className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors"
-                  title="Previous frame"
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                  title="Anterior frame"
                 >
-                  <SkipBack className="w-5 h-5" />
+                  <SkipBack className="w-4 h-4" />
+                  <span>Anterior Frame</span>
                 </button>
 
-                <button
-                  onClick={togglePlayPause}
-                  className="p-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
-                >
-                  {isPlaying ? (
-                    <Pause className="w-6 h-6" />
-                  ) : (
-                    <Play className="w-6 h-6" />
-                  )}
-                </button>
+                <div className="mx-2 flex items-center gap-2">
+                  <button
+                    onClick={togglePlayPause}
+                    className="p-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-6 h-6" />
+                    ) : (
+                      <Play className="w-6 h-6" />
+                    )}
+                  </button>
+                </div>
 
                 <button
                   onClick={skipForward}
-                  className="p-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors"
-                  title="Next frame"
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                  title="Próximo frame"
                 >
-                  <SkipForward className="w-5 h-5" />
+                  <span>Próximo Frame</span>
+                  <SkipForward className="w-4 h-4" />
                 </button>
               </div>
 

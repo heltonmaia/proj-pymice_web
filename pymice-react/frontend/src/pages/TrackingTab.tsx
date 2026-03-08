@@ -1034,6 +1034,20 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
   }
 
+  const handleAddFullFrameROI = () => {
+    // If we already have a full frame ROI, don't add another one
+    if (rois.some(roi => roi.roi_type === 'FullFrame')) {
+      return
+    }
+
+    const newROI: ROI = {
+      roi_type: 'FullFrame',
+      center_x: 0,
+      center_y: 0,
+    }
+    setRois([...rois, newROI])
+  }
+
   const handleStartTracking = async () => {
     if (!videoFile || !modelFile) return
 
@@ -1254,14 +1268,25 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             </label>
             <select
               value={currentROIType}
-              onChange={(e) => setCurrentROIType(e.target.value as ROIType)}
+              onChange={(e) => {
+                const type = e.target.value as ROIType
+                setCurrentROIType(type)
+                if (type === 'FullFrame') {
+                  handleAddFullFrameROI()
+                }
+              }}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
             >
               <option value="Rectangle">Rectangle</option>
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
+<<<<<<< HEAD
               <option value="OpenFieldCircle">Open Field - Circle</option>
               <option value="OpenFieldRectangle">Open Field - Rectangle</option>
+=======
+              <option value="OpenField">Open Field</option>
+              <option value="FullFrame">Full Frame (Todo o vídeo)</option>
+>>>>>>> origin
             </select>
           </div>
         </div>

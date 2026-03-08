@@ -28,6 +28,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
   const [showSettings, setShowSettings] = useState(false)
   const [showBehavioralSettings, setShowBehavioralSettings] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Movement Analysis Selection
+  const [movementAnalysisOptions, setMovementAnalysisOptions] = useState({
+    heatmap: true,
+    velocityOverTime: true,
+    velocityDistribution: true,
+    activityClassification: true,
+  })
   const [analysisLogs, setAnalysisLogs] = useState<Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>>([])
   const logsEndRef = useRef<HTMLDivElement>(null)
 
@@ -83,6 +91,56 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     }, 100)
   }
 
+  const [showLargeFileLoader, setShowLargeFileLoader] = useState(false)
+  const [serverFilePath, setServerFilePath] = useState('')
+
+  const handleServerFileLoad = async () => {
+    if (!serverFilePath.trim()) return
+
+    setIsAnalyzing(true)
+    addLog(`Requesting large JSON from server: ${serverFilePath}...`, 'info')
+
+    try {
+      const response = await analysisApi.loadLargeJson(serverFilePath)
+      if (response.data.success && response.data.data) {
+        const data = response.data.data as TrackingData
+        setTrackingData(data)
+        setJsonFileName(serverFilePath.split('/').pop() || 'Server File')
+
+        addLog('--- Tracking Sync Report (Server Load) ---', 'success')
+        addLog(`JSON file: ${serverFilePath}`, 'info')
+        addLog(`Tracking entries: ${data.tracking_data?.length || 0}`, 'info')
+        if (data.tracking_data && data.tracking_data.length > 0) {
+          addLog(`Max frame index: ${data.tracking_data[data.tracking_data.length - 1].frame_number}`, 'info')
+        }
+        if (data.video_info) {
+          addLog(`Declared in metadata: ${data.video_info.total_frames} frames @ ${data.video_info.fps} fps`, 'info')
+        }
+
+        // Update video info
+        if (videoInfo && data.video_info?.fps) {
+          const newFrames = Math.round(videoInfo.duration * data.video_info.fps)
+          setVideoInfo({
+            frames: newFrames,
+            duration: videoInfo.duration,
+            fps: data.video_info.fps
+          })
+        }
+
+        addLog('Large JSON loaded successfully from server!', 'success')
+        setShowLargeFileLoader(false)
+      } else {
+        addLog(`Server failed to load JSON: ${response.data.error}`, 'error')
+      }
+    } catch (error) {
+      addLog(`Error loading from server: ${(error as any).message}`, 'error')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+
   const handleTrackingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -99,13 +157,61 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     // Store JSON filename for later use
     setJsonFileName(file.name)
 
-    addLog(`Loading tracking data from ${file.name}...`, 'info')
-    const reader = new FileReader()
-    reader.onload = (event) => {
+    const fileSizeMB = file.size / 1024 / 1024
+    addLog(`Loading tracking data from ${file.name} (${fileSizeMB.toFixed(2)} MB)...`, 'info')
+
+    // For files > 50MB, use server-side processing to avoid browser memory issues
+    const LARGE_FILE_THRESHOLD = 50 * 1024 * 1024 // 50MB
+
+    const loadJson = async () => {
       try {
-        const data = JSON.parse(event.target?.result as string)
+        let data: TrackingData
+
+        if (file.size > LARGE_FILE_THRESHOLD) {
+          // Use server-side upload for large files
+          addLog(`Large file detected (${fileSizeMB.toFixed(0)} MB). Using server-side processing...`, 'info')
+          setUploadProgress(0)
+          setIsAnalyzing(true)
+
+          const response = await analysisApi.uploadLargeJson(file, (progress) => {
+            setUploadProgress(progress)
+            if (progress < 100) {
+              // Update log only at certain intervals to avoid spam
+              if (Math.floor(progress) % 10 === 0) {
+                addLog(`Uploading: ${Math.floor(progress)}%`, 'info')
+              }
+            }
+          })
+
+          setUploadProgress(null)
+          setIsAnalyzing(false)
+
+          if (response.data.success && response.data.data) {
+            data = response.data.data as TrackingData
+            addLog('Server-side processing complete!', 'success')
+          } else {
+            throw new Error(response.data.error || 'Server failed to process the file')
+          }
+        } else {
+          // For smaller files, use browser-side parsing
+          data = await new Response(file).json()
+        }
+
         setTrackingData(data)
-        addLog(`Tracking data loaded successfully: ${data.tracking_data?.length || 0} frames`, 'success')
+
+        // Detailed log following check_sync.py strategy
+        addLog('--- Tracking Sync Report ---', 'info')
+        addLog(`JSON file: ${file.name}`, 'info')
+        addLog(`Tracking entries: ${data.tracking_data?.length || 0}`, 'info')
+        if (data.tracking_data && data.tracking_data.length > 0) {
+          addLog(`Max frame index: ${data.tracking_data[data.tracking_data.length - 1].frame_number}`, 'info')
+        }
+        if (data.video_info) {
+          addLog(`Declared in metadata: ${data.video_info.total_frames} frames @ ${data.video_info.fps} fps`, 'info')
+        }
+        if (data.statistics) {
+          addLog(`Statistics: ${data.statistics.yolo_detections} YOLO, ${data.statistics.template_detections} Template`, 'info')
+        }
 
         // Update video info with correct FPS from JSON if video is already loaded
         if (videoInfo && data.video_info?.fps) {
@@ -115,8 +221,15 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             duration: videoInfo.duration,
             fps: data.video_info.fps
           })
-          addLog(`Updated video frame count with JSON fps: ${newFrames} frames @ ${data.video_info.fps} fps`, 'info')
+          addLog(`Updated video estimation with JSON fps: ${newFrames} frames @ ${data.video_info.fps} fps`, 'info')
+
+          if (Math.abs((data.tracking_data?.length || 0) - newFrames) > 2) {
+            addLog(`WARNING: Frame mismatch detected! Difference: ${Math.abs((data.tracking_data?.length || 0) - newFrames)} frames`, 'error')
+          } else {
+            addLog('SUCCESS: Video and JSON frames match perfectly.', 'success')
+          }
         }
+        addLog('---------------------------', 'info')
 
         // Detect analysis type for rearing - search first 100 frames for data
         let detectedType: 'segmentation' | 'pose' | null = null
@@ -138,14 +251,24 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
         if (detectedType) {
           setRearingAnalysisType(detectedType)
         } else {
-          addLog('Warning: No mask or keypoints detected in first 100 frames', 'warning')
+          addLog('Warning: No mask or keypoints detected in first 100 frames', 'info')
         }
       } catch (error) {
         console.error('Failed to parse tracking data:', error)
+        setUploadProgress(null)
+        setIsAnalyzing(false)
         addLog('Failed to parse tracking data: ' + (error as Error).message, 'error')
+
+        // Suggest server-side option for large files
+        if (file.size > LARGE_FILE_THRESHOLD) {
+          addLog('The server-side upload also failed. Try using "Load Large File (Server)" with a file path.', 'error')
+        } else if (file.size > 50 * 1024 * 1024) {
+          addLog('Tip: This file is large. Try using "Load Large File (Server)" option.', 'error')
+        }
       }
     }
-    reader.readAsText(file)
+
+    loadJson()
   }
 
   // Load first frame from video for ROI drawing
@@ -732,39 +855,109 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Tracking Data (JSON)
-            </label>
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleTrackingFileUpload}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
-            />
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                Tracking Data (JSON)
+              </label>
+              <button 
+                onClick={() => setShowLargeFileLoader(!showLargeFileLoader)}
+                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
+                {showLargeFileLoader ? 'Standard Upload' : 'Load Large File (Server)'}
+              </button>
+            </div>
+            
+            {showLargeFileLoader ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Paste full path to JSON file on server..."
+                  value={serverFilePath}
+                  onChange={(e) => setServerFilePath(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm"
+                />
+                <button
+                  onClick={handleServerFileLoad}
+                  disabled={isAnalyzing || !serverFilePath.trim()}
+                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  {isAnalyzing ? 'Loading Large JSON...' : 'Load from Disk'}
+                </button>
+                <p className="text-[10px] text-gray-400">
+                  Tip: Use this for files &gt; 100MB to avoid browser memory errors.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleTrackingFileUpload}
+                  disabled={uploadProgress !== null}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+                />
+                {uploadProgress !== null && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Uploading to server...</span>
+                      <span>{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-400">
+                  Files &gt; 50MB are automatically processed server-side.
+                </p>
+              </div>
+            )}
+            
             {trackingData && (
               <div className="mt-2 space-y-1">
                 <p className="text-sm text-green-400">
                   ✓ {jsonFileName}
                 </p>
                 <p className="text-xs text-gray-400">
-                  • JSON: {trackingData.tracking_data?.length || 0} frames
+                  • JSON: {trackingData.tracking_data?.length || 0} entries 
+                  {trackingData.video_info?.total_frames && ` (Declared: ${trackingData.video_info.total_frames})`}
                 </p>
+                {trackingData.tracking_data && trackingData.tracking_data.length > 0 && (
+                  <p className="text-xs text-gray-400">
+                    • Max Index: {trackingData.tracking_data[trackingData.tracking_data.length - 1].frame_number}
+                  </p>
+                )}
                 {rearingAnalysisType && (
                   <p className="text-xs text-gray-400">
                     • {rearingAnalysisType === 'segmentation' ? 'Segmentation' : 'Pose'} detected
                   </p>
                 )}
                 {videoInfo && videoFile && (
-                  <p className={`text-xs font-medium ${
+                  <div className={`mt-1 p-2 rounded text-xs font-medium ${
                     Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
-                      ? 'text-green-400'
-                      : 'text-orange-400'
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                      : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
                   }`}>
                     {Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
-                      ? '✓ Frame count matches video'
-                      : `⚠ Frame mismatch: ${Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames)} frames difference`
+                      ? '✓ Synchronization OK: Video and JSON match'
+                      : (
+                        <div className="space-y-1">
+                          <p className="font-bold">⚠ Synchronization Mismatch!</p>
+                          <p>• Video: ~{videoInfo.frames} frames</p>
+                          <p>• JSON entries: {trackingData.tracking_data?.length || 0}</p>
+                          {trackingData.video_info?.total_frames && (
+                            <p>• JSON metadata: {trackingData.video_info.total_frames}</p>
+                          )}
+                          <p className="pt-1 text-[10px] opacity-80 uppercase tracking-wider">
+                            Difference: {Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames)} frames
+                          </p>
+                        </div>
+                      )
                     }
-                  </p>
+                  </div>
                 )}
               </div>
             )}
@@ -805,7 +998,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
               <div>
                 <h3 className="font-semibold text-lg">Movement Analysis</h3>
                 <p className="text-sm text-gray-400 mt-1">
-                  Configure parameters for heatmap generation and velocity analysis
+                  Select analyses and configure parameters
                 </p>
               </div>
               {showSettings ? (
@@ -816,175 +1009,162 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             </div>
 
             {showSettings && (
-              <>
-                <h4 className="font-medium text-gray-300 mb-3 mt-6">Heatmap Configuration</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Colormap
-                </label>
-                <select
-                  value={heatmapSettings.colormap}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      colormap: e.target.value as HeatmapSettings['colormap'],
-                    })
-                  }
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
-                >
-                  <option value="hot">Hot</option>
-                  <option value="viridis">Viridis</option>
-                  <option value="plasma">Plasma</option>
-                  <option value="jet">Jet</option>
-                  <option value="rainbow">Rainbow</option>
-                  <option value="coolwarm">Cool Warm</option>
-                </select>
-              </div>
+              <div className="mt-6 space-y-4">
+                {/* Heatmap Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.heatmap
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.heatmap}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, heatmap: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Heatmap</span>
+                      <p className="text-xs text-gray-400">Movement density map with trajectory overlay</p>
+                    </div>
+                  </label>
+                  {movementAnalysisOptions.heatmap && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Colormap</label>
+                          <select
+                            value={heatmapSettings.colormap}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, colormap: e.target.value as HeatmapSettings['colormap'] })}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                          >
+                            <option value="hot">Hot</option>
+                            <option value="viridis">Viridis</option>
+                            <option value="plasma">Plasma</option>
+                            <option value="jet">Jet</option>
+                            <option value="rainbow">Rainbow</option>
+                            <option value="coolwarm">Cool Warm</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Resolution: {heatmapSettings.resolution}</label>
+                          <input type="range" min="20" max="100" step="10" value={heatmapSettings.resolution}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, resolution: parseInt(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Transparency: {heatmapSettings.transparency.toFixed(1)}</label>
+                          <input type="range" min="0" max="1" step="0.1" value={heatmapSettings.transparency}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, transparency: parseFloat(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Smoothing: {heatmapSettings.gaussian_sigma?.toFixed(1)}</label>
+                          <input type="range" min="0" max="3" step="0.5" value={heatmapSettings.gaussian_sigma}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, gaussian_sigma: parseFloat(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Resolution: {heatmapSettings.resolution}
-                </label>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  step="10"
-                  value={heatmapSettings.resolution}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      resolution: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-              </div>
+                {/* Velocity Over Time Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.velocityOverTime
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.velocityOverTime}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocityOverTime: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Velocity Over Time</span>
+                      <p className="text-xs text-gray-400">Movement speed plotted over time with moving average</p>
+                    </div>
+                  </label>
+                  {movementAnalysisOptions.velocityOverTime && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Moving Average Window: {heatmapSettings.moving_average_window} frames</label>
+                          <input type="range" min="5" max="200" step="5" value={heatmapSettings.moving_average_window}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, moving_average_window: parseInt(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-400 mb-1">Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile</label>
+                          <input type="range" min="50" max="95" step="5" value={heatmapSettings.movement_threshold_percentile}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, movement_threshold_percentile: parseInt(e.target.value) })}
+                            className="w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Transparency: {heatmapSettings.transparency.toFixed(2)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={heatmapSettings.transparency}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      transparency: parseFloat(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-              </div>
+                {/* Velocity Distribution Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.velocityDistribution
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.velocityDistribution}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocityDistribution: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Velocity Distribution</span>
+                      <p className="text-xs text-gray-400">Histogram showing frequency of different velocities</p>
+                    </div>
+                  </label>
+                  {movementAnalysisOptions.velocityDistribution && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Histogram Bins: {heatmapSettings.velocity_bins}</label>
+                        <input type="range" min="20" max="100" step="10" value={heatmapSettings.velocity_bins}
+                          onChange={(e) => setHeatmapSettings({ ...heatmapSettings, velocity_bins: parseInt(e.target.value) })}
+                          className="w-full max-w-xs" />
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Gaussian Smoothing: {heatmapSettings.gaussian_sigma?.toFixed(1)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="3"
-                  step="0.5"
-                  value={heatmapSettings.gaussian_sigma}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      gaussian_sigma: parseFloat(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Sigma for Gaussian filter
-                </p>
-              </div>
-            </div>
+                {/* Activity Classification Card */}
+                <div className={`rounded-lg border transition-all ${
+                  movementAnalysisOptions.activityClassification
+                    ? 'border-primary-500 bg-gray-800/50'
+                    : 'border-gray-600 bg-gray-800/30'
+                }`}>
+                  <label className="flex items-center gap-3 p-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={movementAnalysisOptions.activityClassification}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, activityClassification: e.target.checked })}
+                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                    />
+                    <div>
+                      <span className="text-white font-medium">Activity Classification</span>
+                      <p className="text-xs text-gray-400">Pie chart showing moving vs stationary time</p>
+                    </div>
+                  </label>
+                </div>
 
-            <h4 className="font-medium text-gray-300 mb-3 mt-6">Velocity Analysis Parameters</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile
-                </label>
-                <input
-                  type="range"
-                  min="50"
-                  max="95"
-                  step="5"
-                  value={heatmapSettings.movement_threshold_percentile}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      movement_threshold_percentile: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Velocities above this percentile are considered "moving"
-                </p>
+                {/* No analysis selected warning */}
+                {!movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocityOverTime &&
+                 !movementAnalysisOptions.velocityDistribution && !movementAnalysisOptions.activityClassification && (
+                  <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded text-sm text-orange-200">
+                    Please select at least one analysis to run.
+                  </div>
+                )}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Velocity Histogram Bins: {heatmapSettings.velocity_bins}
-                </label>
-                <input
-                  type="range"
-                  min="20"
-                  max="100"
-                  step="10"
-                  value={heatmapSettings.velocity_bins}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      velocity_bins: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Number of bins for velocity distribution
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Moving Average Window: {heatmapSettings.moving_average_window}
-                </label>
-                <input
-                  type="range"
-                  min="5"
-                  max="200"
-                  step="5"
-                  value={heatmapSettings.moving_average_window}
-                  onChange={(e) =>
-                    setHeatmapSettings({
-                      ...heatmapSettings,
-                      moving_average_window: parseInt(e.target.value),
-                    })
-                  }
-                  className="w-full"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Number of frames for velocity smoothing
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-gray-600/30 rounded p-3 mt-4">
-              <p className="text-xs text-gray-300">
-                <span className="font-semibold">Analyses performed:</span> Movement heatmap with trajectory overlay,
-                velocity over time, velocity distribution, activity classification (moving vs stationary)
-              </p>
-            </div>
-          </>
         )}
         </div>
         )}
@@ -1325,21 +1505,34 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   addLog(`Downloaded: ${baseName}_rearing.json`, 'success')
                 } else {
                   // Download movement analysis ZIP
-                  addLog('Generating download package...', 'info')
+                  const selectedCount = [
+                    movementAnalysisOptions.heatmap,
+                    movementAnalysisOptions.velocityOverTime,
+                    movementAnalysisOptions.velocityDistribution,
+                    movementAnalysisOptions.activityClassification
+                  ].filter(Boolean).length
+
+                  addLog(`Generating download package (${selectedCount} images)...`, 'info')
                   const response = await analysisApi.downloadCompleteAnalysis({
                     tracking_data: trackingData,
                     settings: heatmapSettings,
+                    options: {
+                      heatmap: movementAnalysisOptions.heatmap,
+                      velocity_over_time: movementAnalysisOptions.velocityOverTime,
+                      velocity_distribution: movementAnalysisOptions.velocityDistribution,
+                      activity_classification: movementAnalysisOptions.activityClassification,
+                    },
                   })
 
                   // Create download link for ZIP
                   const url = URL.createObjectURL(response.data)
                   const link = document.createElement('a')
                   link.href = url
-                  link.download = `complete_analysis_${new Date().getTime()}.zip`
+                  link.download = `movement_analysis_${new Date().getTime()}.zip`
                   link.click()
                   URL.revokeObjectURL(url)
 
-                  addLog('Downloaded ZIP with: 4 images + enhanced JSON with velocity data', 'success')
+                  addLog(`Downloaded ZIP with ${selectedCount} images`, 'success')
                 }
               } catch (error: any) {
                 addLog(`Download failed: ${error.message}`, 'error')

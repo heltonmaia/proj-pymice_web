@@ -1,6 +1,7 @@
 """YOLO tracking and ROI processing"""
 
 import cv2
+import gc
 import numpy as np
 import torch
 from typing import Optional, List, Dict, Any
@@ -10,6 +11,53 @@ from app.models.schemas import ROI
 from app.processing.detection import calculate_centroid, template_matching
 
 Point = tuple[int, int]
+
+
+def get_gpu_memory_info() -> Dict[str, float]:
+    """
+    Get current GPU memory usage information.
+
+    Returns:
+        Dictionary with memory info in GB:
+        - total: Total GPU memory
+        - used: Currently used memory
+        - free: Available memory
+        - utilization: Usage percentage (0-100)
+    """
+    if not torch.cuda.is_available():
+        return {"total": 0, "used": 0, "free": 0, "utilization": 0}
+
+    try:
+        total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        reserved = torch.cuda.memory_reserved(0) / (1024**3)
+        allocated = torch.cuda.memory_allocated(0) / (1024**3)
+        free = total - reserved
+        utilization = (reserved / total) * 100 if total > 0 else 0
+
+        return {
+            "total": total,
+            "used": reserved,
+            "allocated": allocated,
+            "free": free,
+            "utilization": utilization
+        }
+    except Exception:
+        return {"total": 0, "used": 0, "free": 0, "utilization": 0}
+
+
+def cleanup_gpu_memory(force: bool = False):
+    """
+    Clean up GPU memory to prevent accumulation.
+
+    Args:
+        force: If True, performs aggressive cleanup including garbage collection
+    """
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        if force:
+            gc.collect()
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
 
 
 def create_roi_mask(rois: List[ROI], frame_shape: tuple[int, int]) -> Optional[np.ndarray]:
@@ -50,6 +98,10 @@ def create_roi_mask(rois: List[ROI], frame_shape: tuple[int, int]) -> Optional[n
             points = np.array(roi.vertices, dtype=np.int32)
             cv2.fillPoly(mask, [points], 255)
 
+        elif roi.roi_type == "FullFrame":
+            # Cover entire frame
+            mask.fill(255)
+
     return mask
 
 def point_in_roi(point: Point, roi: ROI) -> bool:
@@ -84,6 +136,9 @@ def point_in_roi(point: Point, roi: ROI) -> bool:
         # Use OpenCV's pointPolygonTest
         result = cv2.pointPolygonTest(points, (float(x), float(y)), False)
         return result >= 0
+
+    elif roi.roi_type == "FullFrame":
+        return True
 
     return False
 
@@ -189,26 +244,41 @@ def process_frame(
     mask_data = None
     keypoints_data = None
 
-    # Detect model type from filename
-    is_seg_model = model_name.lower().endswith('seg.pt')
-    is_pose_model = model_name.lower().endswith('pose.pt')
+    # Detect model type from model task
+    # Standard Ultralytics YOLO models have a .task property
+    model_task = getattr(model, 'task', 'detect')
+    is_seg_model = model_task == 'segment'
+    is_pose_model = model_task == 'pose'
 
     # Try YOLO detection first
     try:
         # Use torch.no_grad() to prevent memory accumulation
         with torch.no_grad():
-            results = model(
-                frame,
-                verbose=False,
-                conf=confidence_threshold,
-                iou=iou_threshold,
-                device=device,
-                imgsz=inference_size,
-                half=True if device == "cuda" else False,  # Use FP16 on CUDA to save memory
-            )
+            # Use torch.cuda.amp.autocast for more efficient GPU memory usage
+            if device == "cuda":
+                with torch.amp.autocast(device_type="cuda"):
+                    results = model(
+                        frame,
+                        verbose=False,
+                        conf=confidence_threshold,
+                        iou=iou_threshold,
+                        device=device,
+                        imgsz=inference_size,
+                        half=True,  # Use FP16 on CUDA to save memory
+                    )
+            else:
+                results = model(
+                    frame,
+                    verbose=False,
+                    conf=confidence_threshold,
+                    iou=iou_threshold,
+                    device=device,
+                    imgsz=inference_size,
+                    half=False,
+                )
 
             # Check if we got any detections
-            if len(results) > 0:
+            if results and len(results) > 0:
                 boxes = results[0].boxes
 
                 if boxes is not None and len(boxes) > 0:
@@ -216,10 +286,10 @@ def process_frame(
                     best_idx = np.argmax(confidences)
 
                     # Process segmentation masks
-                    if is_seg_model and results[0].masks is not None:
+                    if is_seg_model and getattr(results[0], 'masks', None) is not None:
                         masks = results[0].masks.data.cpu().numpy()
 
-                        if len(masks) > 0:
+                        if masks is not None and len(masks) > best_idx:
                             mask = masks[best_idx]
 
                             # Resize mask to frame size
@@ -244,6 +314,9 @@ def process_frame(
                                     approx = cv2.approxPolyDP(largest_contour, epsilon, True)
                                     mask_data = approx.reshape(-1, 2).tolist()
 
+                            # Explicitly delete mask tensors
+                            del masks, mask, mask_resized, binary_mask
+
                     # Process pose keypoints
                     elif is_pose_model and results[0].keypoints is not None:
                         keypoints = results[0].keypoints.data.cpu().numpy()
@@ -266,6 +339,9 @@ def process_frame(
                                     for kpt in kpts if kpt[2] > 0.3
                                 ]
 
+                            # Explicitly delete keypoints tensors
+                            del keypoints, kpts
+
                     # Process regular detection (bbox only)
                     elif not is_seg_model and not is_pose_model:
                         # Use bounding box center as centroid
@@ -274,12 +350,22 @@ def process_frame(
                         centroid = (int((x1 + x2) / 2), int((y1 + y2) / 2))
                         detection_method = "yolo"
 
+                # Explicitly delete results to free memory
+                del boxes, confidences
+
+            # Delete results object
+            del results
+
             # Clear GPU cache periodically to prevent memory buildup
-            if device == "cuda" and frame_number % 50 == 0:
-                torch.cuda.empty_cache()
+            # More frequent cleanup: every 30 frames instead of 50
+            if device == "cuda" and frame_number % 30 == 0:
+                cleanup_gpu_memory(force=(frame_number % 150 == 0))
 
     except Exception as e:
         print(f"YOLO detection failed for frame {frame_number}: {e}")
+        # Cleanup on error
+        if device == "cuda":
+            cleanup_gpu_memory(force=True)
 
     # Fallback to template matching if YOLO failed
     if centroid is None and background_frame is not None:

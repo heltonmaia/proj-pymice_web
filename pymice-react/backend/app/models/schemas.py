@@ -34,7 +34,13 @@ class PolygonROI(BaseModel):
     vertices: List[List[float]]
 
 
-ROI = Union[RectangleROI, CircleROI, PolygonROI]
+class FullFrameROI(BaseModel):
+    roi_type: Literal["FullFrame"]
+    center_x: float = 0.0
+    center_y: float = 0.0
+
+
+ROI = Union[RectangleROI, CircleROI, PolygonROI, FullFrameROI]
 
 
 class ROIPreset(BaseModel):
@@ -103,6 +109,7 @@ class ProcessingProgress(BaseModel):
     percentage: float
     status: Literal["processing", "completed", "error", "stopped"]
     device: Optional[str] = None
+    error: Optional[str] = None
 
 
 # Video Models
@@ -148,9 +155,17 @@ class HeatmapSettings(BaseModel):
     moving_average_window: int = Field(default=30, ge=5, le=200)
 
 
+class AnalysisOptions(BaseModel):
+    heatmap: bool = True
+    velocity_over_time: bool = True
+    velocity_distribution: bool = True
+    activity_classification: bool = True
+
+
 class HeatmapRequest(BaseModel):
     tracking_data: TrackingData
     settings: HeatmapSettings
+    options: AnalysisOptions = Field(default_factory=AnalysisOptions)
 
 
 class OpenFieldAnalysisRequest(BaseModel):

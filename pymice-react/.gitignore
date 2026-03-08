@@ -38,6 +38,7 @@ experiments/
 
 # Local configuration
 .env
+pymice-react/uv-env/
 
 # React/Node
 pymice-react/frontend/node_modules/

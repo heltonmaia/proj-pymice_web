@@ -4,7 +4,7 @@
 set -e
 
 # Configura cache compartilhado do uv
-export UV_CACHE_DIR=/mnt/hd3/uv-common/uv-web-yolo
+export UV_CACHE_DIR=/mnt/hd3/uv-cache
 
 # --- Helper functions ---
 print_info() {
@@ -31,7 +31,7 @@ print_success "uv is installed."
 
 # 2. Define project structure
 BACKEND_DIR="backend"
-VENV_DIR="$BACKEND_DIR/venv"
+VENV_DIR="/mnt/hd3/uv-common/uv-web-yolo"
 REQUIREMENTS_FILE="$BACKEND_DIR/requirements.txt"
 SYMLINK_NAME="uv-env"
 PYTHON_VERSION="python3.11"
@@ -47,6 +47,8 @@ if [ -d "$VENV_DIR" ]; then
     print_info "Virtual environment already exists at '$VENV_DIR'. Skipping creation."
 else
     print_info "Creating virtual environment using $PYTHON_VERSION..."
+    # Ensure parent directory exists
+    mkdir -p "$(dirname "$VENV_DIR")"
     uv venv -p "$PYTHON_VERSION" "$VENV_DIR"
     print_success "Virtual environment created at '$VENV_DIR'."
 fi
@@ -56,14 +58,16 @@ print_info "Installing dependencies from '$REQUIREMENTS_FILE'..."
 uv pip install -r "$REQUIREMENTS_FILE" --python "$VENV_DIR/bin/python"
 print_success "Dependencies installed."
 
-# 6. Create symbolic link
+# 6. Create symbolic link (in the project root)
+# The script is run from pymice-react/, so we'll create the symlink there.
 if [ -L "$SYMLINK_NAME" ]; then
-    print_info "Symbolic link '$SYMLINK_NAME' already exists. Skipping creation."
-else
-    print_info "Creating symbolic link '$SYMLINK_NAME' -> '$BACKEND_DIR/venv'..."
-    ln -s "$BACKEND_DIR/venv" "$SYMLINK_NAME"
-    print_success "Symbolic link created."
+    print_info "Symbolic link '$SYMLINK_NAME' already exists. Recreating it to point to $VENV_DIR..."
+    rm "$SYMLINK_NAME"
 fi
+
+print_info "Creating symbolic link '$SYMLINK_NAME' -> '$VENV_DIR'..."
+ln -s "$VENV_DIR" "$SYMLINK_NAME"
+print_success "Symbolic link created."
 
 echo ""
 print_success "Backend setup complete!"

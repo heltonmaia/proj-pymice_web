@@ -144,8 +144,26 @@ export const roiApi = {
 
 // Analysis API
 export const analysisApi = {
-  generateHeatmap: (params: {
-    tracking_data: TrackingData
+  loadLargeJson: (filePath: string) =>
+    api.get<ApiResponse<TrackingData>>('/analysis/load-large-json', { params: { file_path: filePath } }),
+
+  uploadLargeJson: (file: File, onProgress?: (progress: number) => void) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return api.post<ApiResponse<TrackingData>>('/analysis/upload-large-json', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000, // 10 minutes for very large files
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percentage = (progressEvent.loaded * 100) / progressEvent.total
+          onProgress(percentage)
+        }
+      },
+    })
+  },
+
+  generateHeatmap: (params: { tracking_data: TrackingData
     settings: HeatmapSettings
   }) =>
     api.post<Blob>('/analysis/heatmap', params, { responseType: 'blob' }),
@@ -162,6 +180,12 @@ export const analysisApi = {
   downloadCompleteAnalysis: (params: {
     tracking_data: TrackingData
     settings: HeatmapSettings
+    options?: {
+      heatmap?: boolean
+      velocity_over_time?: boolean
+      velocity_distribution?: boolean
+      activity_classification?: boolean
+    }
   }) =>
     api.post<Blob>('/analysis/download', params, { responseType: 'blob' }),
 

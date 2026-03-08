@@ -1,4 +1,4 @@
-import type { ROI, RectangleROI, CircleROI, PolygonROI } from '@/types'
+import type { ROI, RectangleROI, CircleROI, PolygonROI, FullFrameROI } from '@/types'
 
 /**
  * Draw ROI on canvas
@@ -28,7 +28,20 @@ export function drawROI(
     case 'Polygon':
       drawPolygon(ctx, roi as PolygonROI, fill)
       break
+    case 'FullFrame':
+      drawFullFrame(ctx, fill)
+      break
   }
+}
+
+function drawFullFrame(ctx: CanvasRenderingContext2D, fill: boolean) {
+  const width = ctx.canvas.width
+  const height = ctx.canvas.height
+
+  if (fill) {
+    ctx.fillRect(0, 0, width, height)
+  }
+  ctx.strokeRect(0, 0, width, height)
 }
 
 function drawRectangle(ctx: CanvasRenderingContext2D, roi: RectangleROI, fill: boolean) {
@@ -79,6 +92,8 @@ export function isPointInROI(x: number, y: number, roi: ROI): boolean {
       return isPointInCircle(x, y, roi as CircleROI)
     case 'Polygon':
       return isPointInPolygon(x, y, roi as PolygonROI)
+    case 'FullFrame':
+      return true
     default:
       return false
   }

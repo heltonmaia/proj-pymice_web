@@ -50,6 +50,7 @@ echo 3 - Restart services
 echo 4 - Check status
 echo 5 - Check backend logs
 echo 6 - Check frontend logs
+echo 7 - Clean temporary files
 echo 0 - Exit
 
 set /p CHOICE=Choose a function: 
@@ -59,19 +60,27 @@ if "%CHOICE%"=="3" goto restart
 if "%CHOICE%"=="4" goto status
 if "%CHOICE%"=="5" goto backlogs
 if "%CHOICE%"=="6" goto frontlogs
+if "%CHOICE%"=="7" goto clean_cmd
 if "%CHOICE%"=="0" exit /b
 
 echo %CHOICE
 pause
 exit /b
+
+:clean_cmd
+call :clean
+pause
+goto menu
+
 rem ============================================================
 rem START
 rem ============================================================
 :start
 echo Starting the system.....
+call :clean
 
 cd /d "backend"
-start "backend" cmd /c "uv-venv\Scripts\activate.bat && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+start "backend" cmd /c "..\uv-env\Scripts\activate.bat && uvicorn app.main:app --host 0.0.0.0 --port %BACKEND_PORT%"
 timeout /t 2 >nul
 
 cd /d "../"
@@ -81,7 +90,7 @@ echo Backend started..... PID=%BACKEND_PID%
 
 
 cd /d "frontend"
-start "frontend" cmd /c npm run dev
+start "frontend" cmd /c "npm run dev -- --host 0.0.0.0 --port %FRONTEND_PORT%"
 timeout /t 2 >nul
 
 cd /d "../"
@@ -161,6 +170,23 @@ rem ============================================================
 echo frontlogs
 exit /b
 rem ============================================================
+
+rem ============================================================
+rem CLEAN
+rem ============================================================
+:clean
+echo Cleaning temporary files...
+if exist "backend\__pycache__" rmdir /s /q "backend\__pycache__"
+for /d /r "backend" %%d in (__pycache__) do if exist "%%d" rmdir /s /q "%%d"
+
+rem Limpa apenas subpastas específicas, preservando 'models'
+if exist "backend\temp\videos" del /q "backend\temp\videos\*.*"
+if exist "backend\temp\tracking" del /q "backend\temp\tracking\*.*"
+if exist "backend\temp\analysis" del /q "backend\temp\analysis\*.*"
+if exist "logs" del /q "logs\*.*"
+
+echo Cleanup completed (Models folder was NOT touched).
+exit /b
 
 rem ============================================================
 rem UPDATE

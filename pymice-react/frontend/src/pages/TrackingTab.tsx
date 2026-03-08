@@ -1280,13 +1280,9 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               <option value="Rectangle">Rectangle</option>
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
-<<<<<<< HEAD
               <option value="OpenFieldCircle">Open Field - Circle</option>
               <option value="OpenFieldRectangle">Open Field - Rectangle</option>
-=======
-              <option value="OpenField">Open Field</option>
               <option value="FullFrame">Full Frame (Todo o vídeo)</option>
->>>>>>> origin
             </select>
           </div>
         </div>

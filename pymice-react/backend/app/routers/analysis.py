@@ -6,14 +6,17 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import scipy.ndimage as ndimage
 import io
 import json
 import zipfile
 import tempfile
 import os
+import base64
 from pathlib import Path
 from datetime import datetime
+from PIL import Image
 
 from app.models.schemas import (
     ApiResponse,
@@ -138,45 +141,50 @@ async def generate_heatmap(request: HeatmapRequest):
             x_coords,
             y_coords,
             bins=settings.resolution,
-            density=True  # Normalize to density
+            density=True
         )
 
         # Apply Gaussian smoothing for better visualization
         heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
 
-        # Calculate proper extent from actual data
-        extent = [
-            min(x_coords),
-            max(x_coords),
-            min(y_coords),
-            max(y_coords)
-        ]
+        # Normalize heatmap to 0-1 range
+        heatmap_max = heatmap_smooth.max()
+        if heatmap_max > 0:
+            heatmap_normalized = heatmap_smooth / heatmap_max
+        else:
+            heatmap_normalized = heatmap_smooth
 
-        # Plot smoothed heatmap
+        # Calculate proper extent from actual data
+        extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
+
+        # Plot smoothed heatmap with normalized values
         im = ax.imshow(
-            heatmap_smooth.T,
+            heatmap_normalized.T,
             origin='lower',
             extent=extent,
             cmap=settings.colormap,
-            aspect='equal',  # Maintain aspect ratio
+            aspect='equal',
             alpha=settings.transparency,
-            interpolation='bilinear'  # Smooth interpolation
+            interpolation='bilinear',
+            vmin=0, vmax=1
         )
 
         # Plot trajectory overlay
         ax.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
 
-        # Mark center of mass
-        ax.scatter(center_x, center_y, c='red', s=100, marker='x',
-                  linewidth=3, label='Center of Mass', zorder=5)
+        # Colorbar with exact plot height using make_axes_locatable
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.1)
+        cbar = plt.colorbar(im, cax=cax, label='Density (norm.)')
+        cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+        cbar.set_ticklabels(['0.0', '0.25', '0.5', '0.75', '1.0'])
 
-        # Add colorbar and labels
-        plt.colorbar(im, ax=ax, label='Movement Density', shrink=0.8)
         ax.set_xlabel('X Position (pixels)', fontsize=12)
         ax.set_ylabel('Y Position (pixels)', fontsize=12)
         ax.set_title('Animal Movement Heatmap', fontsize=16, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        ax.legend()
+
+        # Discrete and transparent legend
+        ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
 
         # Save to buffer with high DPI
         buf = io.BytesIO()
@@ -306,10 +314,36 @@ async def analyze_movement(tracking_data: TrackingData):
 
 @router.post("/complete")
 async def generate_complete_analysis(request: HeatmapRequest):
-    """Generate complete analysis panel with heatmap and movement analysis"""
+    """Generate analysis panel with only selected analyses"""
     try:
         tracking_data = request.tracking_data
         settings = request.settings
+        options = request.options
+
+        # Get which analyses to include
+        include_heatmap = options.heatmap
+        include_velocity_time = options.velocity_over_time
+        include_velocity_dist = options.velocity_distribution
+        include_activity = options.activity_classification
+
+        # Heatmap display options
+        heatmap_display = options.heatmap_display
+        show_heatmap_only = heatmap_display.show_heatmap_only if heatmap_display else True
+        show_with_overlay = heatmap_display.show_with_overlay if heatmap_display else False
+
+        # If both heatmap options are selected, we need 2 heatmap slots
+        heatmap_count = 0
+        if include_heatmap:
+            if show_heatmap_only:
+                heatmap_count += 1
+            if show_with_overlay and request.video_frame_base64:
+                heatmap_count += 1
+
+        # Count selected analyses (heatmap counts as potentially 2)
+        selected_count = heatmap_count + sum([include_velocity_time, include_velocity_dist, include_activity])
+
+        if selected_count == 0:
+            raise HTTPException(status_code=400, detail="At least one analysis must be selected")
 
         # Extract data (skip None values)
         frames = []
@@ -359,115 +393,159 @@ async def generate_complete_analysis(request: HeatmapRequest):
         stationary_ratio = 1 - (np.sum(moving_frames) / len(moving_frames)) if len(moving_frames) > 0 else 1
         distances_from_center = np.sqrt((x_coords - center_x)**2 + (y_coords - center_y)**2)
 
-        # Create complete analysis panel
-        fig = plt.figure(figsize=(24, 14))
-        gs = fig.add_gridspec(2, 3, height_ratios=[2.5, 1.2], width_ratios=[1.5, 1, 1.5],
-                             hspace=0.3, wspace=0.25)
+        # Determine layout based on selected analyses
+        if selected_count == 1:
+            # Single analysis - simple layout
+            fig, ax = plt.subplots(figsize=(12, 8))
+            axes = [ax]
+        elif selected_count == 2:
+            # Two analyses - side by side
+            fig, axes = plt.subplots(1, 2, figsize=(18, 8))
+        elif selected_count == 3:
+            # Three analyses - 2 columns, one spanning
+            fig = plt.figure(figsize=(18, 12))
+            if include_heatmap:
+                # Heatmap on top, others below
+                gs = fig.add_gridspec(2, 2, height_ratios=[1.5, 1], hspace=0.3, wspace=0.25)
+                axes = [fig.add_subplot(gs[0, :])]  # Heatmap spans top
+                axes.append(fig.add_subplot(gs[1, 0]))
+                axes.append(fig.add_subplot(gs[1, 1]))
+            else:
+                gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.25)
+                axes = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, 0])]
+        else:
+            # All four analyses
+            fig = plt.figure(figsize=(20, 14))
+            gs = fig.add_gridspec(2, 2, height_ratios=[1.5, 1], hspace=0.3, wspace=0.25)
+            axes = [
+                fig.add_subplot(gs[0, 0]),  # Heatmap
+                fig.add_subplot(gs[0, 1]),  # Velocity over time
+                fig.add_subplot(gs[1, 0]),  # Velocity distribution
+                fig.add_subplot(gs[1, 1])   # Activity classification
+            ]
 
-        # Plot 1: High-resolution Movement Heatmap
-        ax1 = fig.add_subplot(gs[0, :2])
-        heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
-        heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
+        # Track which axis to use
+        ax_idx = 0
 
-        extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
-        im = ax1.imshow(
-            heatmap_smooth.T,
-            origin='lower',
-            extent=extent,
-            cmap=settings.colormap,
-            aspect='equal',
-            alpha=settings.transparency,
-            interpolation='bilinear'
-        )
+        # Helper function to draw heatmap on an axis
+        def draw_heatmap(ax, x_coords, y_coords, settings, title, background_img=None):
+            heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
+            heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
 
-        ax1.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
-        ax1.scatter(center_x, center_y, c='red', s=100, marker='x',
-                   linewidth=3, label='Center of Mass')
+            # Normalize heatmap to 0-1 range
+            heatmap_max = heatmap_smooth.max()
+            if heatmap_max > 0:
+                heatmap_normalized = heatmap_smooth / heatmap_max
+            else:
+                heatmap_normalized = heatmap_smooth
 
-        plt.colorbar(im, ax=ax1, label='Movement Density', shrink=0.6)
-        ax1.set_title('Animal Movement Heatmap', fontsize=16, fontweight='bold')
-        ax1.set_xlabel('X Position (pixels)', fontsize=12)
-        ax1.set_ylabel('Y Position (pixels)', fontsize=12)
-        ax1.grid(True, alpha=0.3)
-        ax1.legend()
+            extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
 
-        # Plot 2: Statistics Summary
-        ax2 = fig.add_subplot(gs[0, 2])
-        ax2.axis('off')
-        ax2.set_title('Analysis Summary', fontsize=16, fontweight='bold', pad=20, y=1.0)
+            # Draw background image if provided
+            if background_img is not None:
+                ax.imshow(background_img, extent=extent, aspect='equal', alpha=0.7)
 
-        stats_text = (
-            f"Total Frames: {len(frames)}\n"
-            f"Duration: {timestamps[-1] - timestamps[0]:.2f}s\n"
-            f"\n"
-            f"Spatial Statistics:\n"
-            f"  Center: ({center_x:.0f}, {center_y:.0f})\n"
-            f"  Mean dist: {np.mean(distances_from_center):.1f}px\n"
-            f"  Max dist: {np.max(distances_from_center):.1f}px\n"
-            f"\n"
-            f"Movement Statistics:\n"
-            f"  Total dist: {total_distance:.1f}px\n"
-            f"  Mean vel: {np.mean(velocities):.2f}px/s\n"
-            f"  Max vel: {np.max(velocities):.2f}px/s\n"
-            f"  Threshold: {movement_threshold:.2f}px/s\n"
-            f"  Stationary: {stationary_ratio*100:.1f}%\n"
-            f"  Moving: {(1-stationary_ratio)*100:.1f}%\n"
-            f"\n"
-            f"Configuration:\n"
-            f"  Bins: {settings.resolution}\n"
-            f"  Colormap: {settings.colormap}\n"
-            f"  Alpha: {settings.transparency}"
-        )
+            im = ax.imshow(
+                heatmap_normalized.T,
+                origin='lower',
+                extent=extent,
+                cmap=settings.colormap,
+                aspect='equal',
+                alpha=settings.transparency,
+                interpolation='bilinear',
+                vmin=0, vmax=1
+            )
 
-        ax2.text(0.08, 0.88, stats_text, transform=ax2.transAxes,
-                fontsize=13, verticalalignment='top', fontfamily='sans-serif',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.95, pad=1.2),
-                linespacing=1.5, weight='normal')
+            # Trajectory with discrete legend
+            ax.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
 
-        # Plot 3: Movement velocity over time
-        ax3 = fig.add_subplot(gs[1, 0])
-        time_points = timestamps[1:]
-        ax3.plot(time_points, velocities, 'g-', linewidth=1, alpha=0.5, label='Instantaneous')
+            # Colorbar with exact plot height
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="3%", pad=0.1)
+            cbar = plt.colorbar(im, cax=cax, label='Density (norm.)')
+            cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+            cbar.set_ticklabels(['0.0', '0.25', '0.5', '0.75', '1.0'])
 
-        # Calculate moving average
-        window = settings.moving_average_window
-        if len(velocities) >= window:
-            moving_avg = np.convolve(velocities, np.ones(window)/window, mode='valid')
-            # Adjust time points for moving average (centered)
-            offset = (window - 1) // 2
-            ma_time = time_points[offset:offset + len(moving_avg)]
-            ax3.plot(ma_time, moving_avg, 'b-', linewidth=2,
-                    label=f'Moving Avg (window={window})')
+            ax.set_title(title, fontsize=16, fontweight='bold')
+            ax.set_xlabel('X Position (pixels)', fontsize=12)
+            ax.set_ylabel('Y Position (pixels)', fontsize=12)
+            ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
 
-        ax3.axhline(y=np.mean(velocities), color='r', linestyle='--',
-                   label=f'Overall Mean: {np.mean(velocities):.1f}px/s')
-        ax3.axhline(y=movement_threshold, color='orange', linestyle=':',
-                   label='Movement threshold')
-        ax3.set_title('Movement Velocity', fontsize=13, fontweight='bold')
-        ax3.set_xlabel('Time (seconds)')
-        ax3.set_ylabel('Velocity (px/s)')
-        ax3.grid(True, alpha=0.3)
-        ax3.legend()
+        # Decode background image if provided
+        background_img = None
+        if request.video_frame_base64 and show_with_overlay:
+            try:
+                img_data = base64.b64decode(request.video_frame_base64.split(',')[-1])
+                background_img = np.array(Image.open(io.BytesIO(img_data)))
+            except Exception as e:
+                print(f"Failed to decode background image: {e}")
 
-        # Plot 4: Velocity distribution
-        ax4 = fig.add_subplot(gs[1, 1])
-        ax4.hist(velocities, bins=settings.velocity_bins, alpha=0.7, color='purple', edgecolor='black')
-        ax4.axvline(x=np.mean(velocities), color='r', linestyle='--',
-                   label=f'Mean: {np.mean(velocities):.1f}px/s')
-        ax4.axvline(x=movement_threshold, color='orange', linestyle=':',
-                   label='Movement threshold')
-        ax4.set_title('Velocity Distribution', fontsize=13, fontweight='bold')
-        ax4.set_xlabel('Velocity (px/s)')
-        ax4.set_ylabel('Frequency')
-        ax4.legend()
+        # Plot Heatmap(s)
+        if include_heatmap:
+            # Heatmap Only
+            if show_heatmap_only:
+                ax = axes[ax_idx]
+                ax_idx += 1
+                draw_heatmap(ax, x_coords, y_coords, settings, 'Animal Movement Heatmap')
 
-        # Plot 5: Activity classification
-        ax5 = fig.add_subplot(gs[1, 2])
-        labels = ['Moving', 'Stationary']
-        sizes = [1 - stationary_ratio, stationary_ratio]
-        colors = ['#ff9999', '#66b3ff']
-        ax5.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=90)
-        ax5.set_title('Activity Classification', fontsize=13, fontweight='bold')
+            # Heatmap with Overlay
+            if show_with_overlay and background_img is not None:
+                ax = axes[ax_idx]
+                ax_idx += 1
+                draw_heatmap(ax, x_coords, y_coords, settings, 'Heatmap with Original Image', background_img)
+
+        # Plot Velocity over time
+        if include_velocity_time:
+            ax = axes[ax_idx]
+            ax_idx += 1
+
+            time_points = timestamps[1:]
+            ax.plot(time_points, velocities, 'g-', linewidth=1, alpha=0.5, label='Instantaneous')
+
+            # Calculate moving average
+            window = settings.moving_average_window
+            if len(velocities) >= window:
+                moving_avg = np.convolve(velocities, np.ones(window)/window, mode='valid')
+                offset = (window - 1) // 2
+                ma_time = time_points[offset:offset + len(moving_avg)]
+                ax.plot(ma_time, moving_avg, 'b-', linewidth=2,
+                        label=f'Moving Avg (window={window})')
+
+            ax.axhline(y=np.mean(velocities), color='r', linestyle='--',
+                       label=f'Overall Mean: {np.mean(velocities):.1f}px/s')
+            ax.axhline(y=movement_threshold, color='orange', linestyle=':',
+                       label='Movement threshold')
+            ax.set_title('Movement Velocity', fontsize=13, fontweight='bold')
+            ax.set_xlabel('Time (seconds)')
+            ax.set_ylabel('Velocity (px/s)')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+
+        # Plot Velocity distribution
+        if include_velocity_dist:
+            ax = axes[ax_idx]
+            ax_idx += 1
+
+            ax.hist(velocities, bins=settings.velocity_bins, alpha=0.7, color='purple', edgecolor='black')
+            ax.axvline(x=np.mean(velocities), color='r', linestyle='--',
+                       label=f'Mean: {np.mean(velocities):.1f}px/s')
+            ax.axvline(x=movement_threshold, color='orange', linestyle=':',
+                       label='Movement threshold')
+            ax.set_title('Velocity Distribution', fontsize=13, fontweight='bold')
+            ax.set_xlabel('Velocity (px/s)')
+            ax.set_ylabel('Frequency')
+            ax.legend()
+
+        # Plot Activity classification
+        if include_activity:
+            ax = axes[ax_idx]
+            ax_idx += 1
+
+            labels = ['Moving', 'Stationary']
+            sizes = [1 - stationary_ratio, stationary_ratio]
+            colors = ['#ff9999', '#66b3ff']
+            ax.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=90)
+            ax.set_title('Activity Classification', fontsize=13, fontweight='bold')
 
         plt.tight_layout(pad=2.0)
 
@@ -547,35 +625,88 @@ async def download_complete_analysis(request: HeatmapRequest):
         include_velocity_dist = options.velocity_distribution if options else True
         include_activity = options.activity_classification if options else True
 
+        # Heatmap display options
+        heatmap_display = options.heatmap_display if options else None
+        show_heatmap_only = heatmap_display.show_heatmap_only if heatmap_display else True
+        show_with_overlay = heatmap_display.show_with_overlay if heatmap_display else False
+
+        # Decode background image if provided
+        background_img = None
+        if request.video_frame_base64 and show_with_overlay:
+            try:
+                img_data = base64.b64decode(request.video_frame_base64.split(',')[-1])
+                background_img = np.array(Image.open(io.BytesIO(img_data)))
+            except Exception as e:
+                print(f"Failed to decode background image: {e}")
+
+        # Helper function to save plot in multiple formats
+        def save_plot(fig, base_path):
+            fig.savefig(f'{base_path}.png', dpi=300, bbox_inches='tight')
+            fig.savefig(f'{base_path}.svg', format='svg', bbox_inches='tight')
+
+        # Helper function to draw heatmap
+        def create_heatmap_figure(x_coords, y_coords, settings, title, background_img=None):
+            fig, ax = plt.subplots(figsize=(12, 8))
+
+            heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
+            heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
+
+            # Normalize heatmap to 0-1 range
+            heatmap_max = heatmap_smooth.max()
+            if heatmap_max > 0:
+                heatmap_normalized = heatmap_smooth / heatmap_max
+            else:
+                heatmap_normalized = heatmap_smooth
+
+            extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
+
+            # Draw background image if provided
+            if background_img is not None:
+                ax.imshow(background_img, extent=extent, aspect='equal', alpha=0.7)
+
+            im = ax.imshow(heatmap_normalized.T, origin='lower', extent=extent,
+                           cmap=settings.colormap, aspect='equal',
+                           alpha=settings.transparency, interpolation='bilinear',
+                           vmin=0, vmax=1)
+
+            # Trajectory with discrete legend
+            ax.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
+
+            # Colorbar with exact plot height
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="3%", pad=0.1)
+            cbar = fig.colorbar(im, cax=cax, label='Density (norm.)')
+            cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+            cbar.set_ticklabels(['0.0', '0.25', '0.5', '0.75', '1.0'])
+
+            ax.set_title(title, fontsize=16, fontweight='bold')
+            ax.set_xlabel('X Position (pixels)', fontsize=12)
+            ax.set_ylabel('Y Position (pixels)', fontsize=12)
+            ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
+
+            return fig
+
         # Generate individual plots based on selected options
         plot_count = 0
 
-        # 1. Heatmap
-        if include_heatmap:
+        # 1. Heatmap Only
+        if include_heatmap and show_heatmap_only:
             plot_count += 1
-            plt.figure(figsize=(12, 8))
-            heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
-            heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
-            extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
-            im = plt.imshow(heatmap_smooth.T, origin='lower', extent=extent,
-                           cmap=settings.colormap, aspect='equal',
-                           alpha=settings.transparency, interpolation='bilinear')
-            plt.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
-            plt.scatter(center_x, center_y, c='red', s=100, marker='x',
-                       linewidth=3, label='Center of Mass')
-            plt.colorbar(im, label='Movement Density')
-            plt.title('Animal Movement Heatmap', fontsize=16, fontweight='bold')
-            plt.xlabel('X Position (pixels)', fontsize=12)
-            plt.ylabel('Y Position (pixels)', fontsize=12)
-            plt.grid(True, alpha=0.3)
-            plt.legend()
-            plt.savefig(temp_dir / f'{plot_count:02d}_heatmap.png', dpi=300, bbox_inches='tight')
-            plt.close()
+            fig = create_heatmap_figure(x_coords, y_coords, settings, 'Animal Movement Heatmap')
+            save_plot(fig, str(temp_dir / f'{plot_count:02d}_heatmap'))
+            plt.close(fig)
 
-        # 2. Velocity over time
+        # 2. Heatmap with Overlay
+        if include_heatmap and show_with_overlay and background_img is not None:
+            plot_count += 1
+            fig = create_heatmap_figure(x_coords, y_coords, settings, 'Heatmap with Original Image', background_img)
+            save_plot(fig, str(temp_dir / f'{plot_count:02d}_heatmap_overlay'))
+            plt.close(fig)
+
+        # 3. Velocity over time
         if include_velocity_time:
             plot_count += 1
-            plt.figure(figsize=(10, 6))
+            fig = plt.figure(figsize=(10, 6))
             time_points = timestamps[1:]
             plt.plot(time_points, velocities, 'g-', linewidth=1, alpha=0.5, label='Instantaneous')
 
@@ -598,13 +729,13 @@ async def download_complete_analysis(request: HeatmapRequest):
             plt.ylabel('Velocity (pixels/second)')
             plt.grid(True, alpha=0.3)
             plt.legend()
-            plt.savefig(temp_dir / f'{plot_count:02d}_velocity.png', dpi=300, bbox_inches='tight')
+            save_plot(fig, str(temp_dir / f'{plot_count:02d}_velocity'))
             plt.close()
 
-        # 3. Velocity distribution
+        # 4. Velocity distribution
         if include_velocity_dist:
             plot_count += 1
-            plt.figure(figsize=(8, 6))
+            fig = plt.figure(figsize=(8, 6))
             plt.hist(velocities, bins=settings.velocity_bins, alpha=0.7, color='purple', edgecolor='black')
             plt.axvline(x=np.mean(velocities), color='r', linestyle='--',
                        label=f'Mean: {np.mean(velocities):.1f}px/s')
@@ -614,19 +745,19 @@ async def download_complete_analysis(request: HeatmapRequest):
             plt.xlabel('Velocity (pixels/second)')
             plt.ylabel('Frequency')
             plt.legend()
-            plt.savefig(temp_dir / f'{plot_count:02d}_velocity_distribution.png', dpi=300, bbox_inches='tight')
+            save_plot(fig, str(temp_dir / f'{plot_count:02d}_velocity_distribution'))
             plt.close()
 
-        # 4. Activity classification
+        # 5. Activity classification
         if include_activity:
             plot_count += 1
-            plt.figure(figsize=(8, 8))
+            fig = plt.figure(figsize=(8, 8))
             labels = ['Moving', 'Stationary']
             sizes = [1 - stationary_ratio, stationary_ratio]
             colors = ['#ff9999', '#66b3ff']
             plt.pie(sizes, labels=labels, autopct='%1.1f%%', colors=colors, startangle=90)
             plt.title('Activity Classification', fontsize=16, fontweight='bold')
-            plt.savefig(temp_dir / f'{plot_count:02d}_activity_classification.png', dpi=300, bbox_inches='tight')
+            save_plot(fig, str(temp_dir / f'{plot_count:02d}_activity_classification'))
             plt.close()
 
         # Create ZIP file (images only, no JSON)

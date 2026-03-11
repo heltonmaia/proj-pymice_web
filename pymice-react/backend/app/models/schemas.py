@@ -155,17 +155,24 @@ class HeatmapSettings(BaseModel):
     moving_average_window: int = Field(default=30, ge=5, le=200)
 
 
+class HeatmapDisplayOptions(BaseModel):
+    show_heatmap_only: bool = True
+    show_with_overlay: bool = False
+
+
 class AnalysisOptions(BaseModel):
     heatmap: bool = True
     velocity_over_time: bool = True
     velocity_distribution: bool = True
     activity_classification: bool = True
+    heatmap_display: HeatmapDisplayOptions = Field(default_factory=HeatmapDisplayOptions)
 
 
 class HeatmapRequest(BaseModel):
     tracking_data: TrackingData
     settings: HeatmapSettings
     options: AnalysisOptions = Field(default_factory=AnalysisOptions)
+    video_frame_base64: Optional[str] = None  # Base64 encoded frame for overlay
 
 
 class OpenFieldAnalysisRequest(BaseModel):

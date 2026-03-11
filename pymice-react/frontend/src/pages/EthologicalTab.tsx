@@ -36,6 +36,37 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     velocityDistribution: true,
     activityClassification: true,
   })
+
+  // Heatmap display options
+  const [heatmapDisplayOptions, setHeatmapDisplayOptions] = useState({
+    showHeatmapOnly: true,
+    showWithOverlay: false,
+  })
+
+  // Default values for reset
+  const defaultHeatmapSettings: HeatmapSettings = {
+    resolution: 50,
+    colormap: 'hot',
+    transparency: 0.5,
+    movement_threshold_percentile: 75,
+    velocity_bins: 50,
+    gaussian_sigma: 1.0,
+    moving_average_window: 30,
+  }
+
+  const resetMovementSettings = () => {
+    setHeatmapSettings(defaultHeatmapSettings)
+    setMovementAnalysisOptions({
+      heatmap: true,
+      velocityOverTime: true,
+      velocityDistribution: true,
+      activityClassification: true,
+    })
+    setHeatmapDisplayOptions({
+      showHeatmapOnly: true,
+      showWithOverlay: false,
+    })
+  }
   const [analysisLogs, setAnalysisLogs] = useState<Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>>([])
   const logsEndRef = useRef<HTMLDivElement>(null)
 
@@ -748,13 +779,70 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           addLog('No behavioral analysis selected', 'error')
         }
       } else {
-        // Movement analysis (heatmap + velocity)
-        addLog('Starting complete analysis (heatmap + movement)...', 'info')
+        // Movement analysis - only selected analyses
+        const selectedAnalyses = []
+        if (movementAnalysisOptions.heatmap) {
+          if (heatmapDisplayOptions.showHeatmapOnly) selectedAnalyses.push('Heatmap')
+          if (heatmapDisplayOptions.showWithOverlay) selectedAnalyses.push('Heatmap with Overlay')
+        }
+        if (movementAnalysisOptions.velocityOverTime) selectedAnalyses.push('Velocity Over Time')
+        if (movementAnalysisOptions.velocityDistribution) selectedAnalyses.push('Velocity Distribution')
+        if (movementAnalysisOptions.activityClassification) selectedAnalyses.push('Activity Classification')
+
+        addLog(`Starting analysis: ${selectedAnalyses.join(', ')}...`, 'info')
         addLog('Settings: ' + JSON.stringify(heatmapSettings), 'info')
+
+        // Capture video frame from middle of video if overlay is requested
+        let videoFrameBase64: string | undefined = undefined
+        if (heatmapDisplayOptions.showWithOverlay && videoFile) {
+          addLog('Capturing frame from middle of video for overlay...', 'info')
+          try {
+            const video = document.createElement('video')
+            video.src = URL.createObjectURL(videoFile)
+            video.muted = true
+
+            await new Promise<void>((resolve, reject) => {
+              video.onloadedmetadata = () => {
+                // Seek to middle of video
+                video.currentTime = video.duration / 2
+              }
+              video.onseeked = () => {
+                const canvas = document.createElement('canvas')
+                canvas.width = video.videoWidth
+                canvas.height = video.videoHeight
+                const ctx = canvas.getContext('2d')
+                if (ctx) {
+                  ctx.drawImage(video, 0, 0)
+                  videoFrameBase64 = canvas.toDataURL('image/jpeg', 0.8)
+                  addLog(`Frame captured at ${(video.duration / 2).toFixed(1)}s`, 'success')
+                }
+                URL.revokeObjectURL(video.src)
+                resolve()
+              }
+              video.onerror = () => {
+                URL.revokeObjectURL(video.src)
+                reject(new Error('Failed to load video'))
+              }
+            })
+          } catch (error) {
+            addLog('Failed to capture video frame: ' + (error as Error).message, 'error')
+          }
+        }
 
         const response = await analysisApi.generateCompleteAnalysis({
           tracking_data: trackingData,
           settings: heatmapSettings,
+          options: {
+            heatmap: movementAnalysisOptions.heatmap,
+            velocity_over_time: movementAnalysisOptions.velocityOverTime,
+            velocity_distribution: movementAnalysisOptions.velocityDistribution,
+            activity_classification: movementAnalysisOptions.activityClassification,
+            heatmap_display: {
+              show_heatmap_only: heatmapDisplayOptions.showHeatmapOnly,
+              show_with_overlay: heatmapDisplayOptions.showWithOverlay,
+            },
+          },
+          video_frame_base64: videoFrameBase64,
         })
 
         // Create image URL from blob
@@ -1029,7 +1117,30 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     </div>
                   </label>
                   {movementAnalysisOptions.heatmap && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700 space-y-4">
+                      {/* Display Options */}
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={heatmapDisplayOptions.showHeatmapOnly}
+                            onChange={(e) => setHeatmapDisplayOptions({ ...heatmapDisplayOptions, showHeatmapOnly: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-300">Heatmap Only</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={heatmapDisplayOptions.showWithOverlay}
+                            onChange={(e) => setHeatmapDisplayOptions({ ...heatmapDisplayOptions, showWithOverlay: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-gray-300">With Original Image Overlay</span>
+                        </label>
+                      </div>
+
+                      {/* Parameters */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                           <label className="block text-xs text-gray-400 mb-1">Colormap</label>
@@ -1164,6 +1275,16 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     Please select at least one analysis to run.
                   </div>
                 )}
+
+                {/* Reset Button */}
+                <div className="pt-4 border-t border-gray-600">
+                  <button
+                    onClick={resetMovementSettings}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-600/50 rounded transition-colors"
+                  >
+                    Reset Configurations
+                  </button>
+                </div>
               </div>
         )}
         </div>
@@ -1429,6 +1550,11 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             disabled={
               !trackingData ||
               isAnalyzing ||
+              // For movement tab, check if at least one analysis is selected
+              (activeSubTab === 'movement' && (
+                !movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocityOverTime &&
+                !movementAnalysisOptions.velocityDistribution && !movementAnalysisOptions.activityClassification
+              )) ||
               // For behavioral tab, check specific requirements
               (activeSubTab === 'behavioral' && (
                 // If rearing is selected, need at least 2 ROIs
@@ -1505,14 +1631,52 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   addLog(`Downloaded: ${baseName}_rearing.json`, 'success')
                 } else {
                   // Download movement analysis ZIP
-                  const selectedCount = [
-                    movementAnalysisOptions.heatmap,
-                    movementAnalysisOptions.velocityOverTime,
-                    movementAnalysisOptions.velocityDistribution,
-                    movementAnalysisOptions.activityClassification
-                  ].filter(Boolean).length
+                  let imageCount = 0
+                  if (movementAnalysisOptions.heatmap) {
+                    if (heatmapDisplayOptions.showHeatmapOnly) imageCount++
+                    if (heatmapDisplayOptions.showWithOverlay) imageCount++
+                  }
+                  if (movementAnalysisOptions.velocityOverTime) imageCount++
+                  if (movementAnalysisOptions.velocityDistribution) imageCount++
+                  if (movementAnalysisOptions.activityClassification) imageCount++
 
-                  addLog(`Generating download package (${selectedCount} images)...`, 'info')
+                  addLog(`Generating download package (${imageCount} images in PNG + SVG)...`, 'info')
+
+                  // Capture video frame from middle if overlay is requested
+                  let videoFrameBase64: string | undefined = undefined
+                  if (heatmapDisplayOptions.showWithOverlay && videoFile) {
+                    addLog('Capturing frame from middle of video for overlay...', 'info')
+                    try {
+                      const video = document.createElement('video')
+                      video.src = URL.createObjectURL(videoFile)
+                      video.muted = true
+
+                      await new Promise<void>((resolve, reject) => {
+                        video.onloadedmetadata = () => {
+                          video.currentTime = video.duration / 2
+                        }
+                        video.onseeked = () => {
+                          const canvas = document.createElement('canvas')
+                          canvas.width = video.videoWidth
+                          canvas.height = video.videoHeight
+                          const ctx = canvas.getContext('2d')
+                          if (ctx) {
+                            ctx.drawImage(video, 0, 0)
+                            videoFrameBase64 = canvas.toDataURL('image/jpeg', 0.8)
+                          }
+                          URL.revokeObjectURL(video.src)
+                          resolve()
+                        }
+                        video.onerror = () => {
+                          URL.revokeObjectURL(video.src)
+                          reject(new Error('Failed to load video'))
+                        }
+                      })
+                    } catch (error) {
+                      addLog('Failed to capture video frame: ' + (error as Error).message, 'error')
+                    }
+                  }
+
                   const response = await analysisApi.downloadCompleteAnalysis({
                     tracking_data: trackingData,
                     settings: heatmapSettings,
@@ -1521,7 +1685,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       velocity_over_time: movementAnalysisOptions.velocityOverTime,
                       velocity_distribution: movementAnalysisOptions.velocityDistribution,
                       activity_classification: movementAnalysisOptions.activityClassification,
+                      heatmap_display: {
+                        show_heatmap_only: heatmapDisplayOptions.showHeatmapOnly,
+                        show_with_overlay: heatmapDisplayOptions.showWithOverlay,
+                      },
                     },
+                    video_frame_base64: videoFrameBase64,
                   })
 
                   // Create download link for ZIP
@@ -1532,7 +1701,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   link.click()
                   URL.revokeObjectURL(url)
 
-                  addLog(`Downloaded ZIP with ${selectedCount} images`, 'success')
+                  addLog(`Downloaded ZIP with ${imageCount} images (PNG + SVG formats)`, 'success')
                 }
               } catch (error: any) {
                 addLog(`Download failed: ${error.message}`, 'error')

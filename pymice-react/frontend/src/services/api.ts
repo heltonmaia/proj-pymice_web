@@ -174,6 +174,17 @@ export const analysisApi = {
   generateCompleteAnalysis: (params: {
     tracking_data: TrackingData
     settings: HeatmapSettings
+    options?: {
+      heatmap?: boolean
+      velocity_over_time?: boolean
+      velocity_distribution?: boolean
+      activity_classification?: boolean
+      heatmap_display?: {
+        show_heatmap_only?: boolean
+        show_with_overlay?: boolean
+      }
+    }
+    video_frame_base64?: string
   }) =>
     api.post<Blob>('/analysis/complete', params, { responseType: 'blob' }),
 
@@ -185,7 +196,12 @@ export const analysisApi = {
       velocity_over_time?: boolean
       velocity_distribution?: boolean
       activity_classification?: boolean
+      heatmap_display?: {
+        show_heatmap_only?: boolean
+        show_with_overlay?: boolean
+      }
     }
+    video_frame_base64?: string
   }) =>
     api.post<Blob>('/analysis/download', params, { responseType: 'blob' }),
 

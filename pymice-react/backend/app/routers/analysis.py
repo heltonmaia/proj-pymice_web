@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import scipy.ndimage as ndimage
 import io
@@ -147,17 +148,21 @@ async def generate_heatmap(request: HeatmapRequest):
         # Apply Gaussian smoothing for better visualization
         heatmap_smooth = ndimage.gaussian_filter(heatmap, sigma=settings.gaussian_sigma)
 
-        # Normalize heatmap to 0-1 range
+        # Calculate proper extent from actual data
+        extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
+
+        # Normalize heatmap to 0-1 range first
         heatmap_max = heatmap_smooth.max()
         if heatmap_max > 0:
             heatmap_normalized = heatmap_smooth / heatmap_max
         else:
             heatmap_normalized = heatmap_smooth
 
-        # Calculate proper extent from actual data
-        extent = [min(x_coords), max(x_coords), min(y_coords), max(y_coords)]
+        # Use PowerNorm to enhance low-density areas (gamma < 1 expands low values)
+        # This makes areas with less movement more visible
+        norm = mcolors.PowerNorm(gamma=0.4, vmin=0, vmax=1)
 
-        # Plot smoothed heatmap with normalized values
+        # Plot smoothed heatmap with power normalization
         im = ax.imshow(
             heatmap_normalized.T,
             origin='lower',
@@ -166,25 +171,33 @@ async def generate_heatmap(request: HeatmapRequest):
             aspect='equal',
             alpha=settings.transparency,
             interpolation='bilinear',
-            vmin=0, vmax=1
+            norm=norm
         )
 
-        # Plot trajectory overlay
-        ax.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
+        # Plot trajectory overlay (using trajectory settings)
+        trajectory = request.options.trajectory if request.options else None
+        if trajectory is None or trajectory.show_trajectory:
+            traj_color = trajectory.color if trajectory else 'white'
+            traj_alpha = trajectory.alpha if trajectory else 0.4
+            traj_width = trajectory.width if trajectory else 1.0
+            ax.plot(x_coords, y_coords, color=traj_color, alpha=traj_alpha,
+                    linewidth=traj_width, label='Trajectory')
 
         # Colorbar with exact plot height using make_axes_locatable
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.1)
         cbar = plt.colorbar(im, cax=cax, label='Density (norm.)')
-        cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
-        cbar.set_ticklabels(['0.0', '0.25', '0.5', '0.75', '1.0'])
+        cbar.set_ticks([0, 1.0])
+        cbar.set_ticklabels(['0', '1'])
 
         ax.set_xlabel('X Position (pixels)', fontsize=12)
         ax.set_ylabel('Y Position (pixels)', fontsize=12)
         ax.set_title('Animal Movement Heatmap', fontsize=16, fontweight='bold')
 
-        # Discrete and transparent legend
-        ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
+        # Discrete and transparent legend (only if trajectory is shown)
+        trajectory = request.options.trajectory if request.options else None
+        if trajectory is None or trajectory.show_trajectory:
+            ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
 
         # Save to buffer with high DPI
         buf = io.BytesIO()
@@ -427,6 +440,13 @@ async def generate_complete_analysis(request: HeatmapRequest):
         # Track which axis to use
         ax_idx = 0
 
+        # Get trajectory settings
+        trajectory = options.trajectory if options else None
+        traj_show = trajectory.show_trajectory if trajectory else True
+        traj_color = trajectory.color if trajectory else 'white'
+        traj_alpha = trajectory.alpha if trajectory else 0.4
+        traj_width = trajectory.width if trajectory else 1.0
+
         # Helper function to draw heatmap on an axis
         def draw_heatmap(ax, x_coords, y_coords, settings, title, background_img=None):
             heatmap, _, _ = np.histogram2d(x_coords, y_coords, bins=settings.resolution, density=True)
@@ -445,6 +465,9 @@ async def generate_complete_analysis(request: HeatmapRequest):
             if background_img is not None:
                 ax.imshow(background_img, extent=extent, aspect='equal', alpha=0.7)
 
+            # Use PowerNorm to enhance low-density areas (gamma < 1 expands low values)
+            norm = mcolors.PowerNorm(gamma=0.4, vmin=0, vmax=1)
+
             im = ax.imshow(
                 heatmap_normalized.T,
                 origin='lower',
@@ -453,23 +476,26 @@ async def generate_complete_analysis(request: HeatmapRequest):
                 aspect='equal',
                 alpha=settings.transparency,
                 interpolation='bilinear',
-                vmin=0, vmax=1
+                norm=norm
             )
 
-            # Trajectory with discrete legend
-            ax.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
+            # Trajectory with configurable style
+            if traj_show:
+                ax.plot(x_coords, y_coords, color=traj_color, alpha=traj_alpha,
+                        linewidth=traj_width, label='Trajectory')
 
-            # Colorbar with exact plot height
+            # Colorbar with exact plot height (normalized 0-1)
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="3%", pad=0.1)
             cbar = plt.colorbar(im, cax=cax, label='Density (norm.)')
-            cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
-            cbar.set_ticklabels(['0.0', '0.25', '0.5', '0.75', '1.0'])
+            cbar.set_ticks([0, 1.0])
+            cbar.set_ticklabels(['0', '1'])
 
             ax.set_title(title, fontsize=16, fontweight='bold')
             ax.set_xlabel('X Position (pixels)', fontsize=12)
             ax.set_ylabel('Y Position (pixels)', fontsize=12)
-            ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
+            if traj_show:
+                ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
 
         # Decode background image if provided
         background_img = None
@@ -644,6 +670,13 @@ async def download_complete_analysis(request: HeatmapRequest):
             fig.savefig(f'{base_path}.png', dpi=300, bbox_inches='tight')
             fig.savefig(f'{base_path}.svg', format='svg', bbox_inches='tight')
 
+        # Get trajectory settings
+        trajectory = options.trajectory if options else None
+        traj_show = trajectory.show_trajectory if trajectory else True
+        traj_color = trajectory.color if trajectory else 'white'
+        traj_alpha = trajectory.alpha if trajectory else 0.4
+        traj_width = trajectory.width if trajectory else 1.0
+
         # Helper function to draw heatmap
         def create_heatmap_figure(x_coords, y_coords, settings, title, background_img=None):
             fig, ax = plt.subplots(figsize=(12, 8))
@@ -664,25 +697,31 @@ async def download_complete_analysis(request: HeatmapRequest):
             if background_img is not None:
                 ax.imshow(background_img, extent=extent, aspect='equal', alpha=0.7)
 
+            # Use PowerNorm to enhance low-density areas (gamma < 1 expands low values)
+            norm = mcolors.PowerNorm(gamma=0.4, vmin=0, vmax=1)
+
             im = ax.imshow(heatmap_normalized.T, origin='lower', extent=extent,
                            cmap=settings.colormap, aspect='equal',
                            alpha=settings.transparency, interpolation='bilinear',
-                           vmin=0, vmax=1)
+                           norm=norm)
 
-            # Trajectory with discrete legend
-            ax.plot(x_coords, y_coords, 'k-', alpha=0.3, linewidth=0.5, label='Trajectory')
+            # Trajectory with configurable style
+            if traj_show:
+                ax.plot(x_coords, y_coords, color=traj_color, alpha=traj_alpha,
+                        linewidth=traj_width, label='Trajectory')
 
-            # Colorbar with exact plot height
+            # Colorbar with exact plot height (normalized 0-1)
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="3%", pad=0.1)
             cbar = fig.colorbar(im, cax=cax, label='Density (norm.)')
-            cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
-            cbar.set_ticklabels(['0.0', '0.25', '0.5', '0.75', '1.0'])
+            cbar.set_ticks([0, 1.0])
+            cbar.set_ticklabels(['0', '1'])
 
             ax.set_title(title, fontsize=16, fontweight='bold')
             ax.set_xlabel('X Position (pixels)', fontsize=12)
             ax.set_ylabel('Y Position (pixels)', fontsize=12)
-            ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
+            if traj_show:
+                ax.legend(loc='upper right', framealpha=0.5, fontsize=9, fancybox=True, edgecolor='gray')
 
             return fig
 

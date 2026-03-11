@@ -124,6 +124,21 @@ pymice-react/
 - Speed and distance metrics
 - Open Field analysis
 - Statistical visualizations
+- Configurable trajectory display (color, width, opacity)
+
+#### Heatmap Power Normalization
+
+The heatmap uses a **Power Normalization** with gamma=0.4 to enhance visualization of low-density movement areas. This non-linear scaling expands lower density values, making it easier to see all areas where the animal moved, not just the hotspots.
+
+**How it works:**
+- Traditional linear normalization would make low-density areas nearly invisible when there's a high-concentration hotspot
+- Power normalization with gamma < 1 compresses high values and expands low values
+- Formula: `normalized_value = value^gamma` where gamma=0.4
+- Result: Areas with less frequent movement become visible with lighter colors
+
+**Colorbar:** Normalized from 0 to 1, where:
+- **0** = No movement detected in that region
+- **1** = Maximum movement density (hotspot)
 
 ### 4. Extra Tools Tab
 - GPU diagnostics (CUDA/MPS/CPU)

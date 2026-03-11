@@ -43,6 +43,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     showWithOverlay: false,
   })
 
+  // Trajectory display options
+  const [trajectorySettings, setTrajectorySettings] = useState({
+    showTrajectory: true,
+    color: 'white' as 'white' | 'black' | 'gray' | 'red' | 'blue',
+    width: 1.0,
+    alpha: 0.4,
+  })
+
   // Default values for reset
   const defaultHeatmapSettings: HeatmapSettings = {
     resolution: 50,
@@ -65,6 +73,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     setHeatmapDisplayOptions({
       showHeatmapOnly: true,
       showWithOverlay: false,
+    })
+    setTrajectorySettings({
+      showTrajectory: true,
+      color: 'white',
+      width: 1.0,
+      alpha: 0.4,
     })
   }
   const [analysisLogs, setAnalysisLogs] = useState<Array<{ time: string; message: string; type: 'info' | 'error' | 'success' }>>([])
@@ -841,6 +855,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
               show_heatmap_only: heatmapDisplayOptions.showHeatmapOnly,
               show_with_overlay: heatmapDisplayOptions.showWithOverlay,
             },
+            trajectory: {
+              show_trajectory: trajectorySettings.showTrajectory,
+              color: trajectorySettings.color,
+              width: trajectorySettings.width,
+              alpha: trajectorySettings.alpha,
+            },
           },
           video_frame_base64: videoFrameBase64,
         })
@@ -1138,6 +1158,51 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                           />
                           <span className="text-sm text-gray-300">With Original Image Overlay</span>
                         </label>
+                      </div>
+
+                      {/* Trajectory Settings */}
+                      <div className="mt-3 pt-3 border-t border-gray-600">
+                        <div className="flex items-center gap-4 mb-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={trajectorySettings.showTrajectory}
+                              onChange={(e) => setTrajectorySettings({ ...trajectorySettings, showTrajectory: e.target.checked })}
+                              className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-gray-300 font-medium">Show Trajectory</span>
+                          </label>
+                        </div>
+                        {trajectorySettings.showTrajectory && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Color</label>
+                              <select
+                                value={trajectorySettings.color}
+                                onChange={(e) => setTrajectorySettings({ ...trajectorySettings, color: e.target.value as typeof trajectorySettings.color })}
+                                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                              >
+                                <option value="white">White</option>
+                                <option value="black">Black</option>
+                                <option value="gray">Gray</option>
+                                <option value="red">Red</option>
+                                <option value="blue">Blue</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Width: {trajectorySettings.width.toFixed(1)}</label>
+                              <input type="range" min="0.5" max="3" step="0.5" value={trajectorySettings.width}
+                                onChange={(e) => setTrajectorySettings({ ...trajectorySettings, width: parseFloat(e.target.value) })}
+                                className="w-full" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Opacity: {trajectorySettings.alpha.toFixed(1)}</label>
+                              <input type="range" min="0.1" max="1" step="0.1" value={trajectorySettings.alpha}
+                                onChange={(e) => setTrajectorySettings({ ...trajectorySettings, alpha: parseFloat(e.target.value) })}
+                                className="w-full" />
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Parameters */}
@@ -1688,6 +1753,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       heatmap_display: {
                         show_heatmap_only: heatmapDisplayOptions.showHeatmapOnly,
                         show_with_overlay: heatmapDisplayOptions.showWithOverlay,
+                      },
+                      trajectory: {
+                        show_trajectory: trajectorySettings.showTrajectory,
+                        color: trajectorySettings.color,
+                        width: trajectorySettings.width,
+                        alpha: trajectorySettings.alpha,
                       },
                     },
                     video_frame_base64: videoFrameBase64,

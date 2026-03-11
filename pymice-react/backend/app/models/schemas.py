@@ -160,12 +160,20 @@ class HeatmapDisplayOptions(BaseModel):
     show_with_overlay: bool = False
 
 
+class TrajectorySettings(BaseModel):
+    show_trajectory: bool = True
+    color: Literal["white", "black", "gray", "red", "blue"] = "white"
+    width: float = Field(default=1.0, ge=0.5, le=3.0)
+    alpha: float = Field(default=0.4, ge=0.1, le=1.0)
+
+
 class AnalysisOptions(BaseModel):
     heatmap: bool = True
     velocity_over_time: bool = True
     velocity_distribution: bool = True
     activity_classification: bool = True
     heatmap_display: HeatmapDisplayOptions = Field(default_factory=HeatmapDisplayOptions)
+    trajectory: TrajectorySettings = Field(default_factory=TrajectorySettings)
 
 
 class HeatmapRequest(BaseModel):

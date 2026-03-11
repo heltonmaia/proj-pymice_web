@@ -183,6 +183,12 @@ export const analysisApi = {
         show_heatmap_only?: boolean
         show_with_overlay?: boolean
       }
+      trajectory?: {
+        show_trajectory?: boolean
+        color?: 'white' | 'black' | 'gray' | 'red' | 'blue'
+        width?: number
+        alpha?: number
+      }
     }
     video_frame_base64?: string
   }) =>
@@ -199,6 +205,12 @@ export const analysisApi = {
       heatmap_display?: {
         show_heatmap_only?: boolean
         show_with_overlay?: boolean
+      }
+      trajectory?: {
+        show_trajectory?: boolean
+        color?: 'white' | 'black' | 'gray' | 'red' | 'blue'
+        width?: number
+        alpha?: number
       }
     }
     video_frame_base64?: string

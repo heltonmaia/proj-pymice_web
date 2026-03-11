@@ -163,23 +163,32 @@ start_services() {
         cd backend
 
         # Verificar ambiente virtual UV
-        VENV_PATH="../uv-env"
+        VENV_PATH="/mnt/hd3/uv-common/pymice-react-venv"
 
         if [ ! -d "$VENV_PATH" ]; then
             echo ""
-            echo -e "${RED}✗ Ambiente virtual UV não encontrado!${NC}"
+            echo -e "${RED}✗ Ambiente virtual UV não encontrado em $VENV_PATH${NC}"
             echo ""
             echo -e "${YELLOW}Solução:${NC}"
-            echo "  Rode ./setup_backend.sh para configurar o ambiente."
+            echo "  Crie o ambiente manualmente ou verifique o caminho."
             echo ""
             cd ..
             exit 1
         fi
 
-        echo "   Usando ambiente virtual UV (uv-env)..."
+        # Verificar se o ambiente já está ativo
+        if [ -z "$VIRTUAL_ENV" ]; then
+            echo ""
+            echo -e "${RED}✗ Ambiente virtual não está ativo!${NC}"
+            echo ""
+            echo -e "${YELLOW}Ative manualmente antes de executar:${NC}"
+            echo -e "  ${CYAN}source $VENV_PATH/bin/activate${NC}"
+            echo ""
+            cd ..
+            exit 1
+        fi
 
-        # Ativar venv
-        source "$VENV_PATH/bin/activate"
+        echo "   Usando ambiente virtual: $VIRTUAL_ENV"
 
         # Criar diretórios temp
         mkdir -p temp/{videos,models,tracking,analysis}

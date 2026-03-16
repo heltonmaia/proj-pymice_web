@@ -176,9 +176,12 @@ export const analysisApi = {
     settings: HeatmapSettings
     options?: {
       heatmap?: boolean
-      velocity_over_time?: boolean
-      velocity_distribution?: boolean
+      velocity?: boolean
       activity_classification?: boolean
+      velocity_display?: {
+        show_instantaneous?: boolean
+        show_moving_average?: boolean
+      }
       heatmap_display?: {
         show_heatmap_only?: boolean
         show_with_overlay?: boolean
@@ -199,9 +202,12 @@ export const analysisApi = {
     settings: HeatmapSettings
     options?: {
       heatmap?: boolean
-      velocity_over_time?: boolean
-      velocity_distribution?: boolean
+      velocity?: boolean
       activity_classification?: boolean
+      velocity_display?: {
+        show_instantaneous?: boolean
+        show_moving_average?: boolean
+      }
       heatmap_display?: {
         show_heatmap_only?: boolean
         show_with_overlay?: boolean

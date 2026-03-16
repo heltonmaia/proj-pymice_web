@@ -169,8 +169,7 @@ class TrajectorySettings(BaseModel):
 
 class AnalysisOptions(BaseModel):
     heatmap: bool = True
-    velocity_over_time: bool = True
-    velocity_distribution: bool = True
+    velocity: bool = True
     activity_classification: bool = True
     heatmap_display: HeatmapDisplayOptions = Field(default_factory=HeatmapDisplayOptions)
     trajectory: TrajectorySettings = Field(default_factory=TrajectorySettings)

@@ -32,8 +32,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
   // Movement Analysis Selection
   const [movementAnalysisOptions, setMovementAnalysisOptions] = useState({
     heatmap: true,
-    velocityOverTime: true,
-    velocityDistribution: true,
+    velocity: true,
     activityClassification: true,
   })
 
@@ -66,8 +65,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     setHeatmapSettings(defaultHeatmapSettings)
     setMovementAnalysisOptions({
       heatmap: true,
-      velocityOverTime: true,
-      velocityDistribution: true,
+      velocity: true,
       activityClassification: true,
     })
     setHeatmapDisplayOptions({
@@ -799,8 +797,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           if (heatmapDisplayOptions.showHeatmapOnly) selectedAnalyses.push('Heatmap')
           if (heatmapDisplayOptions.showWithOverlay) selectedAnalyses.push('Heatmap with Overlay')
         }
-        if (movementAnalysisOptions.velocityOverTime) selectedAnalyses.push('Velocity Over Time')
-        if (movementAnalysisOptions.velocityDistribution) selectedAnalyses.push('Velocity Distribution')
+        if (movementAnalysisOptions.velocity) selectedAnalyses.push('Velocity Analysis')
         if (movementAnalysisOptions.activityClassification) selectedAnalyses.push('Activity Classification')
 
         addLog(`Starting analysis: ${selectedAnalyses.join(', ')}...`, 'info')
@@ -848,8 +845,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           settings: heatmapSettings,
           options: {
             heatmap: movementAnalysisOptions.heatmap,
-            velocity_over_time: movementAnalysisOptions.velocityOverTime,
-            velocity_distribution: movementAnalysisOptions.velocityDistribution,
+            velocity: movementAnalysisOptions.velocity,
             activity_classification: movementAnalysisOptions.activityClassification,
             heatmap_display: {
               show_heatmap_only: heatmapDisplayOptions.showHeatmapOnly,
@@ -1245,69 +1241,33 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   )}
                 </div>
 
-                {/* Velocity Over Time Card */}
+                {/* Velocity Analysis Card */}
                 <div className={`rounded-lg border transition-all ${
-                  movementAnalysisOptions.velocityOverTime
+                  movementAnalysisOptions.velocity
                     ? 'border-primary-500 bg-gray-800/50'
                     : 'border-gray-600 bg-gray-800/30'
                 }`}>
                   <label className="flex items-center gap-3 p-4 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={movementAnalysisOptions.velocityOverTime}
-                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocityOverTime: e.target.checked })}
+                      checked={movementAnalysisOptions.velocity}
+                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocity: e.target.checked })}
                       className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="text-white font-medium">Velocity Over Time</span>
-                      <p className="text-xs text-gray-400">Movement speed plotted over time with moving average</p>
+                      <span className="text-white font-medium">Velocity Analysis</span>
+                      <p className="text-xs text-gray-400">Movement speed over time (Window 1 = Instantaneous)</p>
                     </div>
                   </label>
-                  {movementAnalysisOptions.velocityOverTime && (
+                  {movementAnalysisOptions.velocity && (
                     <div className="px-4 pb-4 pt-2 border-t border-gray-700">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">Moving Average Window: {heatmapSettings.moving_average_window} frames</label>
-                          <input type="range" min="5" max="200" step="5" value={heatmapSettings.moving_average_window}
-                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, moving_average_window: parseInt(e.target.value) })}
-                            className="w-full" />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile</label>
-                          <input type="range" min="50" max="95" step="5" value={heatmapSettings.movement_threshold_percentile}
-                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, movement_threshold_percentile: parseInt(e.target.value) })}
-                            className="w-full" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Velocity Distribution Card */}
-                <div className={`rounded-lg border transition-all ${
-                  movementAnalysisOptions.velocityDistribution
-                    ? 'border-primary-500 bg-gray-800/50'
-                    : 'border-gray-600 bg-gray-800/30'
-                }`}>
-                  <label className="flex items-center gap-3 p-4 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={movementAnalysisOptions.velocityDistribution}
-                      onChange={(e) => setMovementAnalysisOptions({ ...movementAnalysisOptions, velocityDistribution: e.target.checked })}
-                      className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
-                    />
-                    <div>
-                      <span className="text-white font-medium">Velocity Distribution</span>
-                      <p className="text-xs text-gray-400">Histogram showing frequency of different velocities</p>
-                    </div>
-                  </label>
-                  {movementAnalysisOptions.velocityDistribution && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">Histogram Bins: {heatmapSettings.velocity_bins}</label>
-                        <input type="range" min="20" max="100" step="10" value={heatmapSettings.velocity_bins}
-                          onChange={(e) => setHeatmapSettings({ ...heatmapSettings, velocity_bins: parseInt(e.target.value) })}
-                          className="w-full max-w-xs" />
+                      <div className="mb-2">
+                        <label className="block text-xs text-gray-400 mb-1">
+                          Smoothing Window: {heatmapSettings.moving_average_window} {heatmapSettings.moving_average_window <= 1 ? '(Instantaneous)' : 'frames'}
+                        </label>
+                        <input type="range" min="1" max="200" step="1" value={heatmapSettings.moving_average_window}
+                          onChange={(e) => setHeatmapSettings({ ...heatmapSettings, moving_average_window: parseInt(e.target.value) })}
+                          className="w-full" />
                       </div>
                     </div>
                   )}
@@ -1327,15 +1287,26 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="text-white font-medium">Activity Classification</span>
-                      <p className="text-xs text-gray-400">Pie chart showing moving vs stationary time</p>
+                      <span className="text-white font-medium">Activity Analysis</span>
+                      <p className="text-xs text-gray-400">Velocity histogram and movement classification</p>
                     </div>
                   </label>
+                  {movementAnalysisOptions.activityClassification && (
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile</label>
+                        <input type="range" min="50" max="95" step="5" value={heatmapSettings.movement_threshold_percentile}
+                          onChange={(e) => setHeatmapSettings({ ...heatmapSettings, movement_threshold_percentile: parseInt(e.target.value) })}
+                          className="w-full" />
+                        <p className="text-[10px] text-gray-500 mt-1">Used to differentiate stationary from moving states in the histogram.</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* No analysis selected warning */}
-                {!movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocityOverTime &&
-                 !movementAnalysisOptions.velocityDistribution && !movementAnalysisOptions.activityClassification && (
+                {!movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocity &&
+                 !movementAnalysisOptions.activityClassification && (
                   <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded text-sm text-orange-200">
                     Please select at least one analysis to run.
                   </div>
@@ -1351,8 +1322,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   </button>
                 </div>
               </div>
-        )}
-        </div>
+            )}
+          </div>
         )}
 
         {/* Behavioral Analysis Tab */}
@@ -1617,8 +1588,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
               isAnalyzing ||
               // For movement tab, check if at least one analysis is selected
               (activeSubTab === 'movement' && (
-                !movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocityOverTime &&
-                !movementAnalysisOptions.velocityDistribution && !movementAnalysisOptions.activityClassification
+                !movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocity && !movementAnalysisOptions.activityClassification
               )) ||
               // For behavioral tab, check specific requirements
               (activeSubTab === 'behavioral' && (
@@ -1701,8 +1671,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     if (heatmapDisplayOptions.showHeatmapOnly) imageCount++
                     if (heatmapDisplayOptions.showWithOverlay) imageCount++
                   }
-                  if (movementAnalysisOptions.velocityOverTime) imageCount++
-                  if (movementAnalysisOptions.velocityDistribution) imageCount++
+                  if (movementAnalysisOptions.velocity) imageCount += 1 // velocity over time
                   if (movementAnalysisOptions.activityClassification) imageCount++
 
                   addLog(`Generating download package (${imageCount} images in PNG + SVG)...`, 'info')
@@ -1747,8 +1716,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     settings: heatmapSettings,
                     options: {
                       heatmap: movementAnalysisOptions.heatmap,
-                      velocity_over_time: movementAnalysisOptions.velocityOverTime,
-                      velocity_distribution: movementAnalysisOptions.velocityDistribution,
+                      velocity: movementAnalysisOptions.velocity,
                       activity_classification: movementAnalysisOptions.activityClassification,
                       heatmap_display: {
                         show_heatmap_only: heatmapDisplayOptions.showHeatmapOnly,

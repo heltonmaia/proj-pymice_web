@@ -14,14 +14,16 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
   const [modelFile, setModelFile] = useState<string>('')
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [rois, setRois] = useState<ROI[]>([])
-  const [currentROIType, setCurrentROIType] = useState<ROIType>('Rectangle')
+  const [currentROIType, setCurrentROIType] = useState<ROIType>('FullFrame')
   const [isTracking, setIsTracking] = useState(false)
   const [progress, setProgress] = useState(0)
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.25)
   const [iouThreshold, setIouThreshold] = useState(0.45)
   const [inferenceSize, setInferenceSize] = useState(640)
+  const [samPrompt, setSamPrompt] = useState('')
   const [taskId, setTaskId] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [isTestingModel, setIsTestingModel] = useState(false)
   const [trackingFrameUrl, setTrackingFrameUrl] = useState<string>('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const trackingIntervalRef = useRef<number | null>(null)
@@ -406,6 +408,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           confidence_threshold: confidenceThreshold,
           iou_threshold: iouThreshold,
           inference_size: inferenceSize,
+          sam_prompt: modelFile.toLowerCase().includes('sam3') ? samPrompt : undefined,
         })
 
         if (!trackingResponse.data.success || !trackingResponse.data.data) {
@@ -1114,6 +1117,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         confidence_threshold: confidenceThreshold,
         iou_threshold: iouThreshold,
         inference_size: inferenceSize,
+        sam_prompt: modelFile.toLowerCase().includes('sam3') ? samPrompt : undefined,
       })
 
       if (trackingResponse.data.success && trackingResponse.data.data) {
@@ -1213,6 +1217,116 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     }
   }
 
+  const handleTestDetection = async () => {
+    if (!uploadedFilename || !modelFile) {
+      addLog('✗ Please upload a video and select a model first')
+      return
+    }
+
+    try {
+      setIsTestingModel(true)
+      addLog(`🧪 Testing detection with model: ${modelFile}...`)
+
+      // Get current frame number and dimensions from video element
+      const video = videoRef.current
+      const frameWidth = video?.videoWidth || 640
+      const frameHeight = video?.videoHeight || 480
+
+      let frameNumber = 0
+      if (video && video.duration) {
+        // Try to get total frames if possible, or use a default FPS (e.g., 30)
+        // This is a heuristic to get a rough frame number for the test
+        const fps = 30
+        frameNumber = Math.floor(video.currentTime * fps)
+      }
+
+      const response = await trackingApi.testDetection({
+        video_filename: uploadedFilename,
+        model_name: modelFile,
+        frame_number: frameNumber,
+        confidence_threshold: confidenceThreshold,
+        iou_threshold: iouThreshold,
+        inference_size: inferenceSize,
+        rois: {
+          preset_name: 'test',
+          description: 'Test ROI',
+          timestamp: new Date().toISOString(),
+          frame_width: frameWidth,
+          frame_height: frameHeight,
+          rois: rois,
+        },
+        sam_prompt: modelFile.toLowerCase().includes('sam3') ? samPrompt : undefined
+      })
+
+      if (response.data.success && response.data.data) {
+        const testTaskId = response.data.data.task_id
+
+        // For SAM3 models, poll for completion since it's now async
+        if (modelFile.toLowerCase().includes('sam3')) {
+          addLog('⏳ Processing SAM3 test (this may take 30-60 seconds)...')
+
+          // Poll for completion with timeout
+          const maxWaitTime = 120000 // 2 minutes timeout
+          const startTime = Date.now()
+          let lastProgress = 0
+
+          const pollInterval = setInterval(async () => {
+            try {
+              const elapsedTime = Date.now() - startTime
+
+              // Check timeout
+              if (elapsedTime > maxWaitTime) {
+                clearInterval(pollInterval)
+                setIsTestingModel(false)
+                addLog('✗ Test timeout - SAM3 initialization took too long. Try with a smaller video.')
+                return
+              }
+
+              const progressResponse = await trackingApi.getProgress(testTaskId)
+              if (progressResponse.data.success && progressResponse.data.data) {
+                const progressData = progressResponse.data.data
+
+                // Log progress updates
+                if (progressData.percentage && progressData.percentage > lastProgress + 10) {
+                  addLog(`⏳ Progress: ${progressData.percentage.toFixed(0)}%`)
+                  lastProgress = progressData.percentage
+                }
+
+                if (progressData.status === 'completed') {
+                  clearInterval(pollInterval)
+                  setTaskId(testTaskId)
+                  setTrackingFrameUrl(`/api/tracking/frame/${testTaskId}?t=${Date.now()}`)
+                  addLog('✓ Test detection completed')
+                  setIsTestingModel(false)
+                } else if (progressData.status === 'error') {
+                  clearInterval(pollInterval)
+                  addLog('✗ Test detection failed: ' + (progressData.error || 'Unknown error'))
+                  setIsTestingModel(false)
+                }
+              }
+            } catch (error) {
+              console.error('Failed to poll test progress:', error)
+              clearInterval(pollInterval)
+              setIsTestingModel(false)
+              addLog('✗ Failed to check test progress')
+            }
+          }, 1000) // Poll every second
+
+        } else {
+          // For non-SAM3 models, it should complete quickly
+          setTaskId(testTaskId)
+          setTrackingFrameUrl(`/api/tracking/frame/${testTaskId}?t=${Date.now()}`)
+          addLog('✓ Test detection completed')
+          setIsTestingModel(false)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to test detection:', error)
+      addLog('✗ Failed to test detection: ' + (error as Error).message)
+      setIsTestingModel(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Controls */}
@@ -1240,7 +1354,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              YOLO Model {availableModels.length === 0 && <span className="text-red-400">(No models found)</span>}
+              Model {availableModels.length === 0 && <span className="text-red-400">(No models found)</span>}
             </label>
             <select
               value={modelFile}
@@ -1277,21 +1391,110 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               }}
               className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
             >
+              <option value="FullFrame">Full Frame (Todo o vídeo)</option>
               <option value="Rectangle">Rectangle</option>
               <option value="Circle">Circle</option>
               <option value="Polygon">Polygon</option>
               <option value="OpenFieldCircle">Open Field - Circle</option>
               <option value="OpenFieldRectangle">Open Field - Rectangle</option>
-              <option value="FullFrame">Full Frame (Todo o vídeo)</option>
             </select>
           </div>
         </div>
-        
+
+        {/* YOLO Model Configuration */}
+        {modelFile.toLowerCase().includes('yolo') && (
+          <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">YOLO Model Configuration</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Confidence Threshold: {confidenceThreshold.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="0.9"
+                  step="0.05"
+                  value={confidenceThreshold}
+                  onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Minimum confidence score for YOLO detections
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  IOU Threshold: {iouThreshold.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="0.9"
+                  step="0.05"
+                  value={iouThreshold}
+                  onChange={(e) => setIouThreshold(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Intersection over Union threshold for NMS
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Inference Size: {inferenceSize}px
+                </label>
+                <input
+                  type="range"
+                  min="320"
+                  max="1280"
+                  step="160"
+                  value={inferenceSize}
+                  onChange={(e) => setInferenceSize(parseInt(e.target.value))}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Image size for inference (smaller = less GPU memory)
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SAM3 Configuration */}
+        {modelFile.toLowerCase().includes('sam3') && (
+          <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">SAM3 Configuration</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Tracking Prompt
+              </label>
+              <input
+                type="text"
+                value={samPrompt}
+                onChange={(e) => setSamPrompt(e.target.value)}
+                placeholder="Enter prompt for tracking (e.g., 'track the white mouse')..."
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              />
+              <p className="text-xs text-gray-400 mt-2">
+                Describe what you want to track using natural language.
+              </p>
+              <p className="text-xs text-yellow-400 mt-2 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Note: SAM3 initialization is computationally intensive and may take 30-60 seconds for the test detection.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Explain ROIS priority */}
         <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
             <h3 className="text-sm font-semibold text-gray-200 mb-3">About ROIs priority:</h3>
             <label className="block text-sm font-medium text-gray-300 mb-2">When multiple ROIs are drawn, later-drawn regions are treated as higher priority for analysis. This assumes you're refining your focus from broad to specific areas.</label>
         </div>
+
 
         {/* ROI Templates Section */}
         <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
@@ -1439,85 +1642,48 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           </div>
         )}
 
-        {/* YOLO Model Configuration */}
-        <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">YOLO Model Configuration</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Confidence Threshold: {confidenceThreshold.toFixed(2)}
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="0.9"
-                step="0.05"
-                value={confidenceThreshold}
-                onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Minimum confidence score for YOLO detections
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                IOU Threshold: {iouThreshold.toFixed(2)}
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="0.9"
-                step="0.05"
-                value={iouThreshold}
-                onChange={(e) => setIouThreshold(parseFloat(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Intersection over Union threshold for NMS
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Inference Size: {inferenceSize}px
-              </label>
-              <input
-                type="range"
-                min="320"
-                max="1280"
-                step="160"
-                value={inferenceSize}
-                onChange={(e) => setInferenceSize(parseInt(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Image size for inference (smaller = less GPU memory)
-              </p>
-            </div>
-          </div>
-        </div>
-
         <div className="flex gap-4 items-center flex-wrap">
           {!isTracking && (
-            <button
-              onClick={videoFiles.length > 0 ? handleBatchTracking : handleStartTracking}
-              disabled={
-                (videoFiles.length === 0 && !videoFile) ||
-                !modelFile ||
-                isTracking ||
-                isUploading
-              }
-              className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-            >
-              <Play className="w-5 h-5" />
-              {isUploading
-                ? 'Uploading...'
-                : videoFiles.length > 0
-                  ? `Start Batch Tracking (${videoFiles.length} videos)`
-                  : 'Start Tracking'}
-            </button>
+            <>
+              <button
+                onClick={videoFiles.length > 0 ? handleBatchTracking : handleStartTracking}
+                disabled={
+                  (videoFiles.length === 0 && !videoFile) ||
+                  !modelFile ||
+                  isTracking ||
+                  isUploading
+                }
+                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Play className="w-5 h-5" />
+                {isUploading
+                  ? 'Uploading...'
+                  : videoFiles.length > 0
+                    ? `Start Batch Tracking (${videoFiles.length} videos)`
+                    : 'Start Tracking'}
+              </button>
+
+              {modelFile.toLowerCase().includes('sam3') && !videoFiles.length && (
+                <button
+                  onClick={handleTestDetection}
+                  disabled={!uploadedFilename || isTestingModel || isUploading}
+                  className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                  title="Test SAM3 on current frame (may take 30-60 seconds)"
+                >
+                  {isTestingModel ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Testing SAM3... (may take 30-60s)
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="w-5 h-5" />
+                      Test Detection (Current Frame)
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
 
           {isUploading && !isTracking && (

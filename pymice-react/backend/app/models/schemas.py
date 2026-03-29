@@ -101,6 +101,8 @@ class TrackingRequest(BaseModel):
     confidence_threshold: float = Field(ge=0.0, le=1.0)
     iou_threshold: float = Field(ge=0.0, le=1.0)
     inference_size: int = Field(default=640, ge=320, le=1280)  # YOLO inference image size (smaller = less GPU memory)
+    sam_prompt: Optional[str] = None
+    frame_number: Optional[int] = 0
 
 
 class ProcessingProgress(BaseModel):

@@ -90,6 +90,7 @@ export const trackingApi = {
     confidence_threshold: number
     iou_threshold: number
     inference_size?: number
+    sam_prompt?: string
   }) =>
     api.post<ApiResponse<{ task_id: string }>>('/tracking/start', params),
 
@@ -101,6 +102,18 @@ export const trackingApi = {
 
   downloadResults: (taskId: string) =>
     api.get(`/tracking/results/${taskId}`, { responseType: 'blob' }),
+
+  testDetection: (params: {
+    video_filename: string
+    model_name: string
+    frame_number: number
+    confidence_threshold: number
+    iou_threshold: number
+    inference_size?: number
+    rois: ROIPreset
+    sam_prompt?: string
+  }) =>
+    api.post<ApiResponse<{ task_id: string }>>('/tracking/test-detection', params),
 
   // ROI Templates
   saveROITemplate: (preset: ROIPreset) =>

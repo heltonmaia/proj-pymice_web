@@ -195,7 +195,7 @@ start_services() {
 
         # Iniciar backend em background
         echo "   Iniciando servidor..."
-        nohup uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT --reload > "../$LOG_DIR/backend.log" 2>&1 &
+        nohup uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT > "../$LOG_DIR/backend.log" 2>&1 &
         echo $! > "../$PID_DIR/backend.pid"
 
         cd ..

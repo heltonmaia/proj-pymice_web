@@ -1127,7 +1127,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
         // Poll for progress and frames
         let deviceLogged = false
+        let isCompleted = false
+        let isPollingRequestInProgress = false
+
         const interval = setInterval(async () => {
+          if (isPollingRequestInProgress || isCompleted) return
+          
+          isPollingRequestInProgress = true
           try {
             const progressResponse = await trackingApi.getProgress(newTaskId)
             if (progressResponse.data.success && progressResponse.data.data) {
@@ -1146,11 +1152,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               setTrackingFrameUrl(`/api/tracking/frame/${newTaskId}?t=${Date.now()}`)
 
               if (progressData.status === 'completed') {
+                isCompleted = true
                 clearInterval(interval)
                 setIsTracking(false)
-                // Keep the last frame visible - don't clear trackingFrameUrl
                 addLog('✓ Tracking completed! You can now download the results.')
               } else if (progressData.status === 'error') {
+                isCompleted = true
                 clearInterval(interval)
                 setIsTracking(false)
                 setTrackingFrameUrl('')
@@ -1158,11 +1165,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               }
             }
           } catch (error) {
-            console.error('Failed to get progress:', error)
+            console.error('Polling error:', error)
+          } finally {
+            isPollingRequestInProgress = false
           }
-        }, 500) // Poll every 500ms for smoother updates
+        }, 1000)
 
-        trackingIntervalRef.current = interval
+        trackingIntervalRef.current = interval as unknown as number
       }
     } catch (error) {
       console.error('Failed to start tracking:', error)

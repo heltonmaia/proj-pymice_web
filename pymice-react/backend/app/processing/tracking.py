@@ -411,14 +411,14 @@ def process_frame(
     return result
 
 
-def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[np.ndarray]:
+def calculate_background(video_path: str, sample_frames: int = 100) -> Optional[np.ndarray]:
     """
     Calculate median background frame from video using frames from the middle section.
-    This avoids noise from start/end of video (e.g., person placing/removing animal).
+    Uses seeking (cap.set) for high performance instead of sequential reading.
 
     Args:
         video_path: Path to video file
-        sample_frames: Number of frames to sample (default: 200)
+        sample_frames: Number of frames to sample (default: 100)
 
     Returns:
         Grayscale background frame (uint8) or None if failed
@@ -429,33 +429,35 @@ def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[
         return None
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total_frames <= 0:
+        # Fallback for videos where frame count is not reported
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 1e9)
+        total_frames = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        
+    if total_frames <= 0:
+        cap.release()
+        return None
 
     # Use middle 50% of video (from 25% to 75%)
     start_frame = int(total_frames * 0.25)
     end_frame = int(total_frames * 0.75)
     middle_frames_count = end_frame - start_frame
 
-    # Calculate step to sample within middle section
-    frame_step = max(1, middle_frames_count // sample_frames)
+    # Calculate indices to sample
+    indices = np.linspace(start_frame, end_frame, sample_frames, dtype=int)
 
     frames = []
-    frame_idx = 0
-
-    while True:
+    print(f"Calculating background from {len(indices)} frames...")
+    
+    for idx in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
         if not ret:
-            break
-
-        # Only process frames in the middle section
-        if start_frame <= frame_idx <= end_frame:
-            if (frame_idx - start_frame) % frame_step == 0:
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                frames.append(gray.astype(np.float32))
-
-                if len(frames) >= sample_frames:
-                    break
-
-        frame_idx += 1
+            continue
+            
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frames.append(gray)
 
     cap.release()
 
@@ -463,6 +465,7 @@ def calculate_background(video_path: str, sample_frames: int = 200) -> Optional[
         return None
 
     # Calculate median background
-    background = np.median(np.array(frames), axis=0).astype(np.uint8)
+    # Use float32 for median calculation to avoid precision issues
+    background = np.median(np.array(frames, dtype=np.float32), axis=0).astype(np.uint8)
 
     return background

@@ -15,8 +15,10 @@ app = FastAPI(
 )
 
 
-def cleanup_temp_directories():
-    """Clean all temporary directories on startup"""
+import time
+
+def cleanup_temp_directories(max_age_seconds: int = 3600):
+    """Clean temporary directories, but only for files older than max_age_seconds"""
     # Directories to clean (but models directory will preserve .pt files)
     temp_dirs = [
         "temp/videos",
@@ -27,18 +29,19 @@ def cleanup_temp_directories():
     ]
 
     print("\n" + "="*70)
-    print("🧹 Cleaning temp directories on startup...")
+    print(f"🧹 Cleaning temp directories (older than {max_age_seconds/60:.0f} min)...")
     print("="*70)
 
     total_files = 0
     total_dirs = 0
     total_space = 0
+    now = time.time()
 
     for temp_dir in temp_dirs:
         if not os.path.exists(temp_dir):
             continue
 
-        print(f"\n📁 Cleaning: {temp_dir}")
+        print(f"\n📁 Checking: {temp_dir}")
 
         try:
             items = os.listdir(temp_dir)
@@ -50,6 +53,15 @@ def cleanup_temp_directories():
                 if temp_dir == "temp/models" and item.endswith('.pt'):
                     print(f"   📌 Preserved model: {item}")
                     continue
+
+                # Check age
+                try:
+                    mtime = os.path.getmtime(item_path)
+                    if now - mtime < max_age_seconds:
+                        print(f"   ⏩ Skipping recent file: {item}")
+                        continue
+                except Exception:
+                    pass
 
                 try:
                     if os.path.isfile(item_path):

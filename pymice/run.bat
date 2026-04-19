@@ -8,9 +8,9 @@ setlocal enabledelayedexpansion
 rem ============================================================
 rem WEB APPLICATION PORTS and DIRS
 rem ============================================================
-set BACKEND_PORT=8000
+set BACKEND_PORT=8765
 set BACKEND_DIR=%~dp0backend
-set FRONTEND_PORT=5173
+set FRONTEND_PORT=5765
 set FRONTEND_DIR=%~dp0frontend
 set LOGS_DIR=%~dp0logs
 rem ============================================================

@@ -315,11 +315,9 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             if (progressData.status === 'completed') {
               clearInterval(interval)
 
-              // Download the result
-              const resultResponse = await trackingApi.downloadResults(taskId)
-              const resultData = JSON.parse(await resultResponse.data.text())
-
-              resolve(resultData)
+              // Don't load the JSON into memory — long tracks can be hundreds of MB each.
+              // The batch download endpoint streams the combined file from disk.
+              resolve({ task_id: taskId })
             } else if (progressData.status === 'error' || progressData.status === 'stopped') {
               clearInterval(interval)
               reject(new Error(progressData.error || 'Tracking failed'))
@@ -468,36 +466,53 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     addLog(`✓ Batch tracking completed: ${successCount} succeeded, ${failedCount} failed`)
   }
 
-  const downloadBatchResults = () => {
-    const combinedData = {
-      batch_info: {
-        total_videos: videoFiles.length,
-        successful_videos: batchResults.length,
-        failed_videos: videoFiles.length - batchResults.length,
-        timestamp: new Date().toISOString(),
-        configuration: {
-          model: modelFile,
-          confidence_threshold: confidenceThreshold,
-          iou_threshold: iouThreshold,
-          rois: rois
-        }
-      },
-      results: batchResults
+  const downloadBatchResults = async () => {
+    const taskIds = batchResults
+      .map((r: { task_id?: string }) => r.task_id)
+      .filter((id): id is string => !!id)
+
+    if (taskIds.length === 0) {
+      addLog('✗ No completed tasks to download')
+      return
     }
 
-    const blob = new Blob([JSON.stringify(combinedData, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
+    try {
+      addLog('Preparing batch download...')
+      const prepareResponse = await trackingApi.prepareBatchDownload({
+        task_ids: taskIds,
+        batch_info: {
+          total_videos: videoFiles.length,
+          successful_videos: batchResults.length,
+          failed_videos: videoFiles.length - batchResults.length,
+          timestamp: new Date().toISOString(),
+          configuration: {
+            model: modelFile,
+            confidence_threshold: confidenceThreshold,
+            iou_threshold: iouThreshold,
+            rois: rois,
+          },
+        },
+      })
 
-    // Generate a shorter, more readable filename with timestamp
-    const now = new Date()
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    a.download = `batch_track_${timestamp}.json`
+      const downloadId = prepareResponse.data.data?.download_id
+      if (!prepareResponse.data.success || !downloadId) {
+        throw new Error(prepareResponse.data.error || 'Failed to prepare batch download')
+      }
 
-    a.click()
-    URL.revokeObjectURL(url)
-    addLog('✓ Batch results downloaded successfully')
+      // Stream via browser download manager — backend StreamingResponse reads files chunk-by-chunk.
+      const now = new Date()
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const a = document.createElement('a')
+      a.href = `/api/tracking/results/batch/${downloadId}`
+      a.setAttribute('download', `batch_track_${timestamp}.json`)
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      addLog('✓ Batch results download started')
+    } catch (error) {
+      console.error('Batch download failed:', error)
+      addLog('✗ Batch download failed: ' + (error as Error).message)
+    }
   }
 
   const handleVideoFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1200,30 +1215,22 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
     setTrackingFrameUrl('')
   }
 
-  const handleDownloadResults = async () => {
+  const handleDownloadResults = () => {
     if (!taskId) return
 
-    try {
-      const response = await trackingApi.downloadResults(taskId)
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
+    // Stream download directly through the browser (no axios buffering).
+    // Results can be hundreds of MB; loading into a JS Blob OOMs the tab and hits the axios timeout.
+    const now = new Date()
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+    const videoBaseName = videoFile?.name.replace(/\.[^/.]+$/, '') || 'video'
 
-      // Generate a shorter, more readable filename with timestamp
-      const now = new Date()
-      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-      const videoBaseName = videoFile?.name.replace(/\.[^/.]+$/, '') || 'video'
-      link.setAttribute('download', `${videoBaseName}_track_${timestamp}.json`)
-
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-      addLog('✓ Results downloaded successfully')
-    } catch (error) {
-      console.error('Failed to download results:', error)
-      addLog('✗ Failed to download results: ' + (error as Error).message)
-    }
+    const link = document.createElement('a')
+    link.href = `/api/tracking/results/${taskId}`
+    link.setAttribute('download', `${videoBaseName}_track_${timestamp}.json`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    addLog('✓ Results download started')
   }
 
   const handleTestDetection = async () => {

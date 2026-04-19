@@ -59,7 +59,7 @@ uv pip install -r "$REQUIREMENTS_FILE" --python "$VENV_DIR/bin/python"
 print_success "Dependencies installed."
 
 # 6. Create symbolic link (in the project root)
-# The script is run from pymice-react/, so we'll create the symlink there.
+# The script is run from pymice/, so we'll create the symlink there.
 if [ -L "$SYMLINK_NAME" ]; then
     print_info "Symbolic link '$SYMLINK_NAME' already exists. Recreating it to point to $VENV_DIR..."
     rm "$SYMLINK_NAME"

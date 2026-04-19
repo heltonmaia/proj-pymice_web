@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
+from typing import List, Dict, Any
 import os
 import shutil
 import uuid
@@ -64,6 +66,15 @@ tracking_tasks = {}
 
 # Store current tracking frames for live preview
 tracking_frames = {}
+
+# Pending batch-download requests (prepare → stream). Entries are one-shot; TTL-purged on prepare.
+batch_download_requests: Dict[str, Dict[str, Any]] = {}
+BATCH_DOWNLOAD_TTL_SEC = 3600
+
+
+class BatchDownloadPrepareRequest(BaseModel):
+    task_ids: List[str]
+    batch_info: Dict[str, Any] = {}
 
 
 def get_video_info_ffprobe(video_path: str) -> dict:
@@ -1177,6 +1188,76 @@ async def test_detection(request: TrackingRequest, background_tasks: BackgroundT
         import traceback
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/results/batch/prepare")
+async def prepare_batch_download(req: BatchDownloadPrepareRequest):
+    """Register a batch download. Returns a one-shot download_id to be streamed via GET."""
+    if not req.task_ids:
+        raise HTTPException(status_code=400, detail="task_ids is empty")
+
+    for tid in req.task_ids:
+        task = tracking_tasks.get(tid)
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task not found: {tid}")
+        if task.get("status") != "completed":
+            raise HTTPException(status_code=400, detail=f"Task not completed: {tid}")
+        results_path = task.get("results_path")
+        if not results_path or not os.path.exists(results_path):
+            raise HTTPException(status_code=404, detail=f"Results missing for task: {tid}")
+
+    now_ts = time.time()
+    for did, entry in list(batch_download_requests.items()):
+        if now_ts - entry.get("created_at", 0) > BATCH_DOWNLOAD_TTL_SEC:
+            del batch_download_requests[did]
+
+    download_id = str(uuid.uuid4())
+    batch_download_requests[download_id] = {
+        "task_ids": list(req.task_ids),
+        "batch_info": req.batch_info or {},
+        "created_at": now_ts,
+    }
+    return ApiResponse(success=True, data={"download_id": download_id})
+
+
+@router.get("/results/batch/{download_id}")
+async def download_batch(download_id: str):
+    """Stream a combined JSON of multiple tracking results without loading them into memory."""
+    entry = batch_download_requests.pop(download_id, None)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Batch download not found or already consumed")
+
+    task_ids: List[str] = entry["task_ids"]
+    batch_info: Dict[str, Any] = entry["batch_info"]
+
+    paths: List[str] = []
+    for tid in task_ids:
+        task = tracking_tasks.get(tid)
+        if not task or not task.get("results_path") or not os.path.exists(task["results_path"]):
+            raise HTTPException(status_code=404, detail=f"Results missing for task: {tid}")
+        paths.append(task["results_path"])
+
+    def stream_combined_json():
+        yield b'{"batch_info":'
+        yield json.dumps(batch_info, ensure_ascii=False).encode("utf-8")
+        yield b',"results":['
+        for i, path in enumerate(paths):
+            if i > 0:
+                yield b","
+            with open(path, "rb") as f:
+                while True:
+                    chunk = f.read(64 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        yield b"]}"
+
+    filename = f"batch_track_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    return StreamingResponse(
+        stream_combined_json(),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/results/{task_id}")

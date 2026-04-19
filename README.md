@@ -57,7 +57,7 @@ source ../uv-env/bin/activate
 pip install -r requirements.txt
 
 # Run server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8765
 ```
 
 **2. Frontend:**
@@ -72,15 +72,15 @@ npm run dev
 ```
 
 ### Access
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
+- **Frontend**: http://localhost:5765
+- **Backend API**: http://localhost:8765
+- **API Docs**: http://localhost:8765/docs
 - **Logs**: `tail -f logs/*.log`
 
 ## 📁 Project Structure
 
 ```
-pymice-react/
+pymice/
 ├── backend/                 # FastAPI API
 │   ├── app/
 │   │   ├── routers/        # REST endpoints
@@ -183,7 +183,7 @@ The heatmap uses a **Power Normalization** with gamma=0.4 to enhance visualizati
 - `POST /api/camera/stream/start` - Start stream
 - `POST /api/video/upload` - Upload video
 
-Complete documentation: http://localhost:8000/docs
+Complete documentation: http://localhost:8765/docs
 
 ## How to Use
 

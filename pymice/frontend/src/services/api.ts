@@ -103,6 +103,9 @@ export const trackingApi = {
   downloadResults: (taskId: string) =>
     api.get(`/tracking/results/${taskId}`, { responseType: 'blob' }),
 
+  prepareBatchDownload: (data: { task_ids: string[]; batch_info: Record<string, unknown> }) =>
+    api.post<ApiResponse<{ download_id: string }>>('/tracking/results/batch/prepare', data),
+
   testDetection: (params: {
     video_filename: string
     model_name: string

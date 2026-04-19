@@ -6,15 +6,22 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html:not(.dark) {
+  color: rgba(17, 24, 39, 0.92);
+  background-color: #f9fafb;
+}
+
+html.dark {
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
 }
 
 body {
@@ -38,15 +45,24 @@ body {
   height: 8px;
 }
 
-::-webkit-scrollbar-track {
-  background: #2a2a2a;
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: #e5e7eb;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
 
-::-webkit-scrollbar-thumb {
+html.dark ::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+html.dark ::-webkit-scrollbar-thumb {
   background: #4a4a4a;
   border-radius: 4px;
 }
-
-::-webkit-scrollbar-thumb:hover {
+html.dark ::-webkit-scrollbar-thumb:hover {
   background: #5a5a5a;
 }

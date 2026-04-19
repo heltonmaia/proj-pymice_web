@@ -1346,12 +1346,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-4">Tracking Configuration</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Video File(s) {videoFiles.length > 0 && `(${videoFiles.length} files selected)`}
             </label>
             <input
@@ -1359,23 +1359,23 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               accept="video/mp4,video/avi,video/x-msvideo,.mp4,.avi"
               multiple
               onChange={handleVideoFilesChange}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
             />
             {videoFiles.length > 1 && (
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 Batch mode: Same ROIs and settings will be applied to all videos
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Model {availableModels.length === 0 && <span className="text-red-400">(No models found)</span>}
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Model {availableModels.length === 0 && <span className="text-red-600 dark:text-red-400">(No models found)</span>}
             </label>
             <select
               value={modelFile}
               onChange={(e) => setModelFile(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
               disabled={availableModels.length === 0}
             >
               <option value="">Select model...</option>
@@ -1386,14 +1386,14 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               ))}
             </select>
             {availableModels.length === 0 && (
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 Place .pt model files in backend/temp/models/ directory
               </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               ROI Type
             </label>
             <select
@@ -1405,7 +1405,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   handleAddFullFrameROI()
                 }
               }}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
             >
               <option value="FullFrame">Full Frame (Todo o vídeo)</option>
               <option value="Rectangle">Rectangle</option>
@@ -1419,11 +1419,11 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
         {/* YOLO Model Configuration */}
         {modelFile.toLowerCase().includes('yolo') && (
-          <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">YOLO Model Configuration</h3>
+          <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-4 border border-gray-200 dark:border-transparent">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">YOLO Model Configuration</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Confidence Threshold: {confidenceThreshold.toFixed(2)}
                 </label>
                 <input
@@ -1435,13 +1435,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   Minimum confidence score for YOLO detections
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   IOU Threshold: {iouThreshold.toFixed(2)}
                 </label>
                 <input
@@ -1453,13 +1453,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   onChange={(e) => setIouThreshold(parseFloat(e.target.value))}
                   className="w-full"
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   Intersection over Union threshold for NMS
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Inference Size: {inferenceSize}px
                 </label>
                 <input
@@ -1471,7 +1471,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   onChange={(e) => setInferenceSize(parseInt(e.target.value))}
                   className="w-full"
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   Image size for inference (smaller = less GPU memory)
                 </p>
               </div>
@@ -1481,10 +1481,10 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
         {/* SAM3 Configuration */}
         {modelFile.toLowerCase().includes('sam3') && (
-          <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">SAM3 Configuration</h3>
+          <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-4 border border-gray-200 dark:border-transparent">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">SAM3 Configuration</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Tracking Prompt
               </label>
               <input
@@ -1492,12 +1492,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                 value={samPrompt}
                 onChange={(e) => setSamPrompt(e.target.value)}
                 placeholder="Enter prompt for tracking (e.g., 'track the white mouse')..."
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
               />
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
                 Describe what you want to track using natural language.
               </p>
-              <p className="text-xs text-yellow-400 mt-2 flex items-center gap-1">
+              <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-2 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 Note: SAM3 initialization is computationally intensive and may take 30-60 seconds for the test detection.
               </p>
@@ -1506,24 +1506,24 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
         )}
 
         {/* Explain ROIS priority */}
-        <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">About ROIs priority:</h3>
-            <label className="block text-sm font-medium text-gray-300 mb-2">When multiple ROIs are drawn, later-drawn regions are treated as higher priority for analysis. This assumes you're refining your focus from broad to specific areas.</label>
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-4 border border-gray-200 dark:border-transparent">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">About ROIs priority:</h3>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">When multiple ROIs are drawn, later-drawn regions are treated as higher priority for analysis. This assumes you're refining your focus from broad to specific areas.</label>
         </div>
 
 
         {/* ROI Templates Section */}
-        <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">ROI Templates</h3>
+        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-4 border border-gray-200 dark:border-transparent">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">ROI Templates</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Load Template
               </label>
               <select
                 value={selectedTemplate}
                 onChange={(e) => setSelectedTemplate(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
               >
                 <option value="">Select a template...</option>
                 {roiTemplates.map((template) => (
@@ -1537,14 +1537,14 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               <button
                 onClick={handleLoadTemplate}
                 disabled={!selectedTemplate}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
               >
                 Load
               </button>
               <button
                 onClick={() => selectedTemplate && handleDeleteTemplate(selectedTemplate)}
                 disabled={!selectedTemplate}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
               >
                 Delete
               </button>
@@ -1554,7 +1554,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             <button
               onClick={() => setShowSaveTemplateModal(true)}
               disabled={rois.length === 0}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-sm font-medium"
             >
               Save Current ROIs as Template
             </button>
@@ -1563,18 +1563,18 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
         {/* Batch Video List */}
         {videoFiles.length > 0 && (
-          <div className="bg-gray-700/30 rounded-lg p-4 mb-4">
+          <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-4 border border-gray-200 dark:border-transparent">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-200">Batch Processing Queue</h3>
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Batch Processing Queue</h3>
               <div className="flex gap-3 text-xs">
-                <span className="text-gray-400">
-                  Total: <span className="text-white font-semibold">{videoFiles.length}</span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Total: <span className="text-gray-900 dark:text-white font-semibold">{videoFiles.length}</span>
                 </span>
-                <span className="text-green-400">
+                <span className="text-green-600 dark:text-green-400">
                   Completed: <span className="font-semibold">{videoFiles.filter(v => v.status === 'completed').length}</span>
                 </span>
                 {videoFiles.filter(v => v.status === 'error').length > 0 && (
-                  <span className="text-red-400">
+                  <span className="text-red-600 dark:text-red-400">
                     Failed: <span className="font-semibold">{videoFiles.filter(v => v.status === 'error').length}</span>
                   </span>
                 )}
@@ -1584,9 +1584,9 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               {videoFiles.map((video, index) => (
                 <div
                   key={index}
-                  className={`relative bg-gray-700 rounded-lg p-3 border transition-all ${currentVideoIndex === index
+                  className={`relative bg-white dark:bg-gray-700 rounded-lg p-3 border transition-all ${currentVideoIndex === index
                     ? 'border-primary-500 shadow-lg shadow-primary-500/20'
-                    : 'border-gray-600'
+                    : 'border-gray-200 dark:border-gray-600'
                     }`}
                 >
                   {/* Current Processing Indicator */}
@@ -1599,29 +1599,29 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                     {/* Status Icon */}
                     <div className="flex-shrink-0">
                       {video.status === 'pending' && (
-                        <Clock className="w-5 h-5 text-gray-400" />
+                        <Clock className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                       )}
                       {video.status === 'uploading' && (
-                        <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                        <Loader2 className="w-5 h-5 text-blue-500 dark:text-blue-400 animate-spin" />
                       )}
                       {video.status === 'tracking' && (
-                        <Loader2 className="w-5 h-5 text-primary-400 animate-spin" />
+                        <Loader2 className="w-5 h-5 text-primary-500 dark:text-primary-400 animate-spin" />
                       )}
                       {video.status === 'completed' && (
-                        <CheckCircle className="w-5 h-5 text-green-400" />
+                        <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
                       )}
                       {video.status === 'error' && (
-                        <XCircle className="w-5 h-5 text-red-400" />
+                        <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
                       )}
                     </div>
 
                     {/* Video Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-200 truncate">
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
                           {video.filename}
                         </span>
-                        <span className="text-xs text-gray-400 capitalize">
+                        <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">
                           {video.status}
                         </span>
                       </div>
@@ -1629,7 +1629,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                       {/* Progress Bar */}
                       {(video.status === 'uploading' || video.status === 'tracking') && (
                         <div className="mt-2">
-                          <div className="bg-gray-600 rounded-full h-2 overflow-hidden">
+                          <div className="bg-gray-200 dark:bg-gray-600 rounded-full h-2 overflow-hidden">
                             <div
                               className={`h-full transition-all duration-300 ${video.status === 'uploading'
                                 ? 'bg-blue-500'
@@ -1638,7 +1638,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                               style={{ width: `${video.progress}%` }}
                             />
                           </div>
-                          <div className="text-xs text-gray-400 mt-1">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                             {video.progress.toFixed(1)}%
                           </div>
                         </div>
@@ -1646,7 +1646,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
                       {/* Error Message */}
                       {video.status === 'error' && video.error && (
-                        <div className="mt-1 text-xs text-red-400">
+                        <div className="mt-1 text-xs text-red-600 dark:text-red-400">
                           {video.error}
                         </div>
                       )}
@@ -1669,7 +1669,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   isTracking ||
                   isUploading
                 }
-                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <Play className="w-5 h-5" />
                 {isUploading
@@ -1683,7 +1683,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                 <button
                   onClick={handleTestDetection}
                   disabled={!uploadedFilename || isTestingModel || isUploading}
-                  className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                  className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
                   title="Test SAM3 on current frame (may take 30-60 seconds)"
                 >
                   {isTestingModel ? (
@@ -1704,18 +1704,18 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
           {isUploading && !isTracking && (
             <div className="flex-1">
-              <div className="text-sm text-gray-300 mb-2">
+              <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                 {videoFiles.length > 0
                   ? `Uploading first video for preview...`
                   : 'Uploading video...'}
               </div>
-              <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
+              <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                 <div
                   className="bg-blue-500 h-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
-              <div className="text-sm text-gray-400 mt-1">{uploadProgress.toFixed(1)}% uploaded</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{uploadProgress.toFixed(1)}% uploaded</div>
             </div>
           )}
 
@@ -1730,13 +1730,13 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               </button>
 
               <div className="flex-1">
-                <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                   <div
                     className="bg-primary-500 h-full transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-                <div className="text-sm text-gray-400 mt-1">{progress.toFixed(1)}% completed</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{progress.toFixed(1)}% completed</div>
               </div>
             </>
           )}
@@ -1753,16 +1753,16 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
 
               <div className="flex-1">
                 <div className="flex justify-between items-center mb-2">
-                  <div className="text-sm text-gray-300">
+                  <div className="text-sm text-gray-700 dark:text-gray-300">
                     Processing video {currentVideoIndex + 1} of {videoFiles.length}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
                     {videoFiles.filter(v => v.status === 'completed').length} completed • {videoFiles.filter(v => v.status === 'error').length} failed
                   </div>
                 </div>
                 <div className="space-y-2">
                   {/* Overall batch progress */}
-                  <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
                     <div
                       className="bg-primary-500 h-full transition-all duration-300"
                       style={{ width: `${((currentVideoIndex + 1) / videoFiles.length) * 100}%` }}
@@ -1770,9 +1770,9 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   </div>
                   {/* Current video progress */}
                   {currentVideoIndex >= 0 && videoFiles[currentVideoIndex] && (
-                    <div className="bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-blue-400 h-full transition-all duration-300"
+                        className="bg-blue-500 dark:bg-blue-400 h-full transition-all duration-300"
                         style={{ width: `${videoFiles[currentVideoIndex].progress}%` }}
                       />
                     </div>
@@ -1786,7 +1786,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             <button
               onClick={handleDownloadResults}
               disabled={!taskId || isTracking}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
             >
               <Download className="w-5 h-5" />
               Download Results
@@ -1797,7 +1797,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             <button
               onClick={downloadBatchResults}
               disabled={isTracking}
-              className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
             >
               <Download className="w-5 h-5" />
               Download All Results (JSON)
@@ -1812,7 +1812,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                 setCurrentVideoIndex(-1)
               }}
               disabled={isTracking}
-              className="px-6 py-3 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors"
+              className="px-6 py-3 bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors"
             >
               Clear Batch
             </button>
@@ -1821,19 +1821,19 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       </div>
 
       {/* Video Canvas */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h3 className="text-lg font-semibold">
               {isTracking ? 'Live Tracking Preview' : trackingFrameUrl ? 'Tracking Result' : 'Video Preview & ROI Drawing'}
             </h3>
             {videoFiles.length > 0 && !isTracking && !trackingFrameUrl && (
-              <p className="text-xs text-yellow-400 mt-1">
+              <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
                 📦 Batch Mode: Showing first video ({videoFiles[0]?.filename}). ROIs will be applied to all {videoFiles.length} videos.
               </p>
             )}
             {isTracking && videoFiles.length > 0 && currentVideoIndex >= 0 && (
-              <p className="text-xs text-primary-400 mt-1">
+              <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
                 🎬 Processing video {currentVideoIndex + 1}/{videoFiles.length}: {videoFiles[currentVideoIndex]?.filename}
               </p>
             )}
@@ -1842,7 +1842,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             <button
               onClick={handleGenerateServerPreview}
               disabled={isUploading}
-              className="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded text-gray-300 flex items-center gap-2 transition-colors border border-gray-600"
+              className="text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-3 py-1.5 rounded text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors border border-gray-300 dark:border-gray-600"
               title="Use this if video preview is black or not working"
             >
               {isUploading ? (
@@ -1939,8 +1939,8 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
           {isVideoLoading && (
             <div className="absolute inset-0 bg-gray-900/80 flex flex-col items-center justify-center z-20">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mb-4"></div>
-              <p className="text-gray-300 font-medium">Loading video...</p>
-              <p className="text-gray-500 text-sm mt-2 mb-6">Large files may take a moment</p>
+              <p className="text-gray-200 font-medium">Loading video...</p>
+              <p className="text-gray-400 text-sm mt-2 mb-6">Large files may take a moment</p>
 
               {/* Manual Override for stuck loading */}
               <button
@@ -1948,7 +1948,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   setIsVideoLoading(false)
                   setPreviewError(true)
                 }}
-                className="text-xs text-gray-400 hover:text-white underline transition-colors"
+                className="text-xs text-gray-300 hover:text-white underline transition-colors"
               >
                 Taking too long? Use server preview
               </button>
@@ -1960,7 +1960,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
             <div className="absolute inset-0 bg-gray-900/90 flex flex-col items-center justify-center z-20 p-6 text-center">
               <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
               <h3 className="text-lg font-semibold text-white mb-2">Video Preview Unavailable</h3>
-              <p className="text-gray-400 mb-6 max-w-md">
+              <p className="text-gray-300 mb-6 max-w-md">
                 The browser cannot play this video format natively. You can generate a static preview from the server to draw ROIs.
               </p>
               <button
@@ -2021,7 +2021,7 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
               >
                 Clear All ROIs
               </button>
-              <div className="text-sm text-gray-400 flex items-center">
+              <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center">
                 Total ROIs: {rois.length}
               </div>
             </>
@@ -2030,14 +2030,14 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       </div>
 
       {/* Tracking Logs - Always visible */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold mb-4">Tracking Log</h3>
-        <div className="bg-black rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto font-mono text-sm">
+        <div className="bg-gray-50 dark:bg-black rounded-lg p-4 border border-gray-200 dark:border-gray-700 max-h-48 overflow-y-auto font-mono text-sm">
           {trackingLogs.length === 0 ? (
             <div className="text-gray-500 italic">No logs yet. Upload a video to get started.</div>
           ) : (
             trackingLogs.map((log, index) => (
-              <div key={index} className="text-gray-300 mb-1">
+              <div key={index} className="text-gray-700 dark:text-gray-300 mb-1">
                 <span className="text-gray-500">[{log.time}]</span> {log.message}
               </div>
             ))
@@ -2049,11 +2049,11 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
       {/* Save Template Modal */}
       {showSaveTemplateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700">
             <h3 className="text-xl font-semibold mb-4">Save ROI Template</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Template Name *
                 </label>
                 <input
@@ -2061,12 +2061,12 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
                   placeholder="e.g., Open Field Test, Y-Maze, etc."
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Description (optional)
                 </label>
                 <textarea
@@ -2074,10 +2074,10 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                   onChange={(e) => setTemplateDescription(e.target.value)}
                   placeholder="Brief description of the experiment setup..."
                   rows={3}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white"
                 />
               </div>
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
                 {rois.length} ROI(s) will be saved
               </div>
               <div className="flex gap-3 justify-end">
@@ -2087,14 +2087,14 @@ export default function TrackingTab({ onTrackingStateChange }: TrackingTabProps 
                     setTemplateName('')
                     setTemplateDescription('')
                   }}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveTemplate}
                   disabled={!templateName.trim()}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg"
                 >
                   Save Template
                 </button>

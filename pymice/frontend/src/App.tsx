@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Camera, Target, BarChart3, Wrench, Globe, Eye } from 'lucide-react'
 import MouseIcon from './components/MouseIcon'
 import AnimatedMouse from './components/AnimatedMouse'
+import ThemeToggle from './components/ThemeToggle'
 import CameraTab from './pages/CameraTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
@@ -25,9 +26,9 @@ function App() {
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || CameraTab
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
       {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50 relative">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 relative">
         {/* Animated Mouse */}
         <AnimatedMouse trigger={activeTab} />
 
@@ -36,19 +37,22 @@ function App() {
             <div className="flex items-center gap-3">
               <MouseIcon className="w-10 h-10 text-primary-500" style={{ transform: 'scaleX(-1)' }} />
               <div>
-                <h1 className="text-2xl font-bold text-white">PyMice Web</h1>
-                <p className="text-sm text-gray-400">Behavioral Analysis Platform</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">PyMice Web</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Behavioral Analysis Platform</p>
               </div>
             </div>
-            <div className="text-sm text-gray-400">
-              v1.0.0
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                v1.0.0
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       {/* Navigation Tabs */}
-      <nav className="bg-gray-800 border-b border-gray-700">
+      <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="container mx-auto px-4">
           <div className="flex gap-2 overflow-x-auto">
             {tabs.map((tab) => {
@@ -64,10 +68,10 @@ function App() {
                   className={`
                     flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap
                     ${isCurrentTab
-                      ? 'border-primary-500 text-primary-400 bg-gray-700/50'
+                      ? 'border-primary-500 text-primary-700 dark:text-primary-400 bg-gray-100 dark:bg-gray-700/50'
                       : isDisabled
-                        ? 'border-transparent text-gray-600 cursor-not-allowed opacity-50'
-                        : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'
+                        ? 'border-transparent text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                        : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700/30'
                     }
                   `}
                 >
@@ -86,8 +90,8 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-800 border-t border-gray-700 mt-12">
-        <div className="container mx-auto px-4 py-6 text-center text-sm text-gray-400">
+      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-12">
+        <div className="container mx-auto px-4 py-6 text-center text-sm text-gray-600 dark:text-gray-400">
           <p>PyMice Web - Behavioral Analysis Platform</p>
           <p className="mt-1">Built with React + TypeScript + FastAPI</p>
         </div>

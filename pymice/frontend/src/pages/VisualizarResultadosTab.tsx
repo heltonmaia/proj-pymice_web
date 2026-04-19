@@ -524,7 +524,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Eye className="w-5 h-5 text-primary-500" />
@@ -560,7 +560,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                     }
                   }, 100)
                 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 {isDownloading ? (
                   <>
@@ -576,7 +576,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
               <button
                 onClick={handleClearAll}
                 disabled={isDownloading || isAnalyzing || uploadProgress !== null}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
               >
                 <X className="w-4 h-4" />
                 Clear All
@@ -585,14 +585,14 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
           </div>
         </div>
 
-        <p className="text-gray-400 mb-6">
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
           Load a video and its corresponding JSON analysis file to visualize tracking results.
         </p>
 
         {/* File Upload Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               <Upload className="w-4 h-4 inline mr-2" />
               Video File
             </label>
@@ -601,23 +601,23 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
               accept="video/*"
               onChange={handleVideoUpload}
               disabled={isDownloading || isAnalyzing || uploadProgress !== null}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
             />
             {videoFile && (
-              <p className="text-sm text-green-400 mt-2">✓ {videoFile.name}</p>
+              <p className="text-sm text-green-700 dark:text-green-400 mt-2">✓ {videoFile.name}</p>
             )}
           </div>
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-300">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 <Upload className="w-4 h-4 inline mr-2" />
                 JSON File (Tracking Data)
               </label>
-              <button 
+              <button
                 onClick={() => setShowLargeFileLoader(!showLargeFileLoader)}
                 disabled={isDownloading || isAnalyzing}
-                className="text-xs text-primary-400 hover:text-primary-300 transition-colors disabled:opacity-50"
+                className="text-xs text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 transition-colors disabled:opacity-50"
               >
                 {showLargeFileLoader ? 'Standard Upload' : 'Load Large File (Server)'}
               </button>
@@ -630,12 +630,12 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   placeholder="Paste full path to JSON file on server..."
                   value={serverFilePath}
                   onChange={(e) => setServerFilePath(e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm"
+                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white text-sm"
                 />
                 <button
                   onClick={handleServerFileLoad}
                   disabled={isAnalyzing || !serverFilePath.trim()}
-                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:text-gray-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2"
                 >
                   {isAnalyzing ? (
                     <>
@@ -644,7 +644,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                     </>
                   ) : 'Load from Disk'}
                 </button>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Tip: Use this for files &gt; 100MB to avoid browser memory errors.
                 </p>
               </div>
@@ -655,15 +655,15 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   accept=".json"
                   onChange={handleJsonUpload}
                   disabled={isDownloading || isAnalyzing || uploadProgress !== null}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
                 />
                 {uploadProgress !== null && (
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-gray-400">
+                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                       <span>Uploading to server...</span>
                       <span>{Math.round(uploadProgress)}%</span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
                         className="bg-primary-500 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${uploadProgress}%` }}
@@ -671,7 +671,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                     </div>
                   </div>
                 )}
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Files &gt; 50MB are automatically processed server-side.
                 </p>
               </div>
@@ -679,18 +679,18 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
             {trackingData && (
               <div className="mt-2 space-y-1">
-                <p className="text-sm text-green-400">
+                <p className="text-sm text-green-700 dark:text-green-400">
                   ✓ {jsonFileName || 'Data Loaded'}
                 </p>
-                <p className="text-xs text-gray-400">
-                  • JSON: {trackingData.tracking_data?.length || 0} entries 
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  • JSON: {trackingData.tracking_data?.length || 0} entries
                   {trackingData.video_info?.total_frames && ` (Declared: ${trackingData.video_info.total_frames})`}
                 </p>
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-gray-600 dark:text-gray-400">
                   {hasKeypoints && <span className="inline-block mr-3">• Pose detected</span>}
                   {hasMask && <span className="inline-block mr-3">• Segmentation detected</span>}
                   {hasROIs && <span className="inline-block mr-3">• ROIs detected ({trackingData.rois?.length || 0})</span>}
-                  {hasRearingAnalysis && <span className="inline-block mr-3 text-orange-400">• Rearing analysis detected</span>}
+                  {hasRearingAnalysis && <span className="inline-block mr-3 text-orange-700 dark:text-orange-400">• Rearing analysis detected</span>}
                 </div>
               </div>
             )}
@@ -699,13 +699,13 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
         {/* Visualization Controls */}
         {trackingData && videoUrl && (
-          <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6 border border-gray-200 dark:border-transparent">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
               <Settings className="w-4 h-4" />
               Visualization Controls
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-600/30 p-2 rounded transition-colors">
+              <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600/30 p-2 rounded transition-colors">
                 <input
                   type="checkbox"
                   checked={showCentroid}
@@ -713,7 +713,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   disabled={isDownloading || isAnalyzing}
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
-                <span className="text-sm text-gray-300">Centroid</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Centroid</span>
               </label>
 
               <label
@@ -728,7 +728,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   disabled={!hasKeypoints || isDownloading || isAnalyzing}
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
-                <span className="text-sm text-gray-300">Pose (Keypoints)</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Pose (Keypoints)</span>
               </label>
 
               <label
@@ -743,7 +743,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   disabled={!hasMask || isDownloading || isAnalyzing}
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
-                <span className="text-sm text-gray-300">Mask</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Mask</span>
               </label>
 
               <label
@@ -758,10 +758,10 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   disabled={!hasROIs || isDownloading || isAnalyzing}
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
-                <span className="text-sm text-gray-300">ROIs</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">ROIs</span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-600/30 p-2 rounded transition-colors">
+              <label className="flex items-center gap-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600/30 p-2 rounded transition-colors">
                 <input
                   type="checkbox"
                   checked={showTrajectory}
@@ -769,7 +769,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   disabled={isDownloading || isAnalyzing}
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
-                <span className="text-sm text-gray-300">Trajectory</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Trajectory</span>
               </label>
 
               <label
@@ -784,7 +784,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                   disabled={!hasRearingAnalysis || isDownloading || isAnalyzing}
                   className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800 disabled:opacity-50"
                 />
-                <span className="text-sm text-gray-300">Rearing ROIs</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Rearing ROIs</span>
               </label>
             </div>
           </div>
@@ -793,7 +793,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
         {/* Video Player Section */}
         {videoUrl && (
           <div className="space-y-4">
-            <div className="bg-black rounded-lg overflow-hidden border border-gray-700 relative">
+            <div className="bg-black rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700 relative">
               <div className="relative" style={{ width: '100%', aspectRatio: '16/9' }}>
                 <video
                   ref={videoRef}
@@ -819,11 +819,11 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
             </div>
 
             {/* Video Controls */}
-            <div className="bg-gray-700/50 rounded-lg p-4">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
               <div className="flex items-center justify-center gap-2 mb-4">
                 <button
                   onClick={skipBackward}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 rounded-lg transition-colors flex items-center gap-2 text-sm"
                   title="Previous frame"
                 >
                   <SkipBack className="w-4 h-4" />
@@ -833,7 +833,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
                 <div className="mx-2 flex items-center gap-2">
                   <button
                     onClick={togglePlayPause}
-                    className="p-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors"
+                    className="p-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
                   >
                     {isPlaying ? (
                       <Pause className="w-6 h-6" />
@@ -845,7 +845,7 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
                 <button
                   onClick={skipForward}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                  className="px-4 py-2 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 rounded-lg transition-colors flex items-center gap-2 text-sm"
                   title="Next frame"
                 >
                   <span>Next Frame</span>
@@ -854,15 +854,15 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
               </div>
 
               {/* Frame Info */}
-              <div className="text-center text-sm text-gray-300">
+              <div className="text-center text-sm text-gray-700 dark:text-gray-300">
                 <span className="font-mono">
                   Frame: {currentFrame} / {trackingData?.video_info?.total_frames || '?'}
                 </span>
-                <span className="mx-3 text-gray-500">|</span>
+                <span className="mx-3 text-gray-400 dark:text-gray-500">|</span>
                 <span className="font-mono">
                   Time: {videoRef.current?.currentTime.toFixed(2)}s
                 </span>
-                <span className="mx-3 text-gray-500">|</span>
+                <span className="mx-3 text-gray-400 dark:text-gray-500">|</span>
                 <span className="font-mono">FPS: {fps}</span>
               </div>
 
@@ -889,12 +889,12 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
         {/* Instructions when no files loaded */}
         {!videoUrl && !trackingData && (
-          <div className="bg-gray-700/30 rounded-lg p-8 text-center border border-gray-600 border-dashed">
-            <Eye className="w-16 h-16 text-gray-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-300 mb-2">
+          <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-8 text-center border border-gray-300 dark:border-gray-600 border-dashed">
+            <Eye className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
               No files loaded
             </h3>
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
               Load a video and a JSON analysis file to start visualization
             </p>
           </div>
@@ -903,30 +903,30 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
       {/* Statistics Panel */}
       {trackingData && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4">Analysis Statistics</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-sm text-gray-400">Total Frames</div>
-              <div className="text-2xl font-bold text-white">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+              <div className="text-sm text-gray-600 dark:text-gray-400">Total Frames</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {trackingData.video_info?.total_frames || 0}
               </div>
             </div>
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-sm text-gray-400">YOLO Detections</div>
-              <div className="text-2xl font-bold text-green-400">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+              <div className="text-sm text-gray-600 dark:text-gray-400">YOLO Detections</div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {trackingData.statistics?.yolo_detections || 0}
               </div>
             </div>
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-sm text-gray-400">Template Detections</div>
-              <div className="text-2xl font-bold text-yellow-400">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+              <div className="text-sm text-gray-600 dark:text-gray-400">Template Detections</div>
+              <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                 {trackingData.statistics?.template_detections || 0}
               </div>
             </div>
-            <div className="bg-gray-700/50 rounded-lg p-4">
-              <div className="text-sm text-gray-400">Missed Frames</div>
-              <div className="text-2xl font-bold text-red-400">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+              <div className="text-sm text-gray-600 dark:text-gray-400">Missed Frames</div>
+              <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                 {trackingData.statistics?.frames_without_detection || 0}
               </div>
             </div>
@@ -935,29 +935,29 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
           {/* Rearing Analysis Statistics */}
           {(trackingData as any).rearing_analysis && (
             <div className="mt-6">
-              <h4 className="text-md font-semibold mb-3 text-primary-400">Rearing Analysis</h4>
+              <h4 className="text-md font-semibold mb-3 text-primary-700 dark:text-primary-400">Rearing Analysis</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400">Total Events</div>
-                  <div className="text-2xl font-bold text-orange-400">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Total Events</div>
+                  <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
                     {(trackingData as any).rearing_analysis.statistics?.total_events || 0}
                   </div>
                 </div>
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400">Total Duration</div>
-                  <div className="text-2xl font-bold text-purple-400">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Total Duration</div>
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                     {(trackingData as any).rearing_analysis.statistics?.total_duration_seconds?.toFixed(1) || 0}s
                   </div>
                 </div>
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400">Avg Duration</div>
-                  <div className="text-2xl font-bold text-blue-400">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Avg Duration</div>
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                     {(trackingData as any).rearing_analysis.statistics?.average_duration_seconds?.toFixed(2) || 0}s
                   </div>
                 </div>
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="text-sm text-gray-400">Analysis Type</div>
-                  <div className="text-lg font-bold text-cyan-400 uppercase">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Analysis Type</div>
+                  <div className="text-lg font-bold text-cyan-600 dark:text-cyan-400 uppercase">
                     {(trackingData as any).rearing_analysis.analysis_type || 'N/A'}
                   </div>
                 </div>
@@ -967,11 +967,11 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
           {/* Current Frame Details */}
           {trackingData.tracking_data?.[currentFrame] && (
-            <div className="mt-4 bg-gray-700/30 rounded-lg p-4">
-              <h4 className="font-medium text-gray-300 mb-2">
+            <div className="mt-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Current Frame ({currentFrame})
                 {videoRef.current && (
-                  <span className="text-xs text-gray-500 ml-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-500 ml-3">
                     Vídeo: {videoRef.current.currentTime.toFixed(3)}s |
                     JSON: {trackingData.tracking_data[currentFrame].timestamp_sec.toFixed(3)}s |
                     Diff: {Math.abs(videoRef.current.currentTime - trackingData.tracking_data[currentFrame].timestamp_sec).toFixed(3)}s
@@ -980,54 +980,54 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm font-mono">
                 <div>
-                  <span className="text-gray-400">Method:</span>{' '}
-                  <span className="text-white">
+                  <span className="text-gray-600 dark:text-gray-400">Method:</span>{' '}
+                  <span className="text-gray-900 dark:text-white">
                     {trackingData.tracking_data[currentFrame].detection_method}
                   </span>
                 </div>
                 {trackingData.tracking_data[currentFrame].confidence !== undefined && (
                   <div>
-                    <span className="text-gray-400">Confidence:</span>{' '}
-                    <span className="text-white">
+                    <span className="text-gray-600 dark:text-gray-400">Confidence:</span>{' '}
+                    <span className="text-gray-900 dark:text-white">
                       {(trackingData.tracking_data[currentFrame].confidence! * 100).toFixed(1)}%
                     </span>
                   </div>
                 )}
                 <div>
-                  <span className="text-gray-400">Centroid:</span>{' '}
-                  <span className="text-white">
+                  <span className="text-gray-600 dark:text-gray-400">Centroid:</span>{' '}
+                  <span className="text-gray-900 dark:text-white">
                     ({Math.round(trackingData.tracking_data[currentFrame].centroid_x)},
                      {Math.round(trackingData.tracking_data[currentFrame].centroid_y)})
                   </span>
                 </div>
                 {trackingData.tracking_data[currentFrame].roi && (
                   <div>
-                    <span className="text-gray-400">ROI:</span>{' '}
-                    <span className="text-white">
+                    <span className="text-gray-600 dark:text-gray-400">ROI:</span>{' '}
+                    <span className="text-gray-900 dark:text-white">
                       {trackingData.tracking_data[currentFrame].roi}
                     </span>
                   </div>
                 )}
                 {trackingData.tracking_data[currentFrame].keypoints && (
                   <div>
-                    <span className="text-gray-400">Keypoints:</span>{' '}
-                    <span className="text-white">
+                    <span className="text-gray-600 dark:text-gray-400">Keypoints:</span>{' '}
+                    <span className="text-gray-900 dark:text-white">
                       {trackingData.tracking_data[currentFrame].keypoints!.length} points
                     </span>
                   </div>
                 )}
                 {trackingData.tracking_data[currentFrame].mask && (
                   <div>
-                    <span className="text-gray-400">Mask:</span>{' '}
-                    <span className="text-white">
+                    <span className="text-gray-600 dark:text-gray-400">Mask:</span>{' '}
+                    <span className="text-gray-900 dark:text-white">
                       {trackingData.tracking_data[currentFrame].mask!.length} points
                     </span>
                   </div>
                 )}
                 {(trackingData.tracking_data[currentFrame] as any).rearing !== undefined && (
                   <div>
-                    <span className="text-gray-400">Rearing:</span>{' '}
-                    <span className={(trackingData.tracking_data[currentFrame] as any).rearing ? 'text-red-400 font-bold' : 'text-green-400'}>
+                    <span className="text-gray-600 dark:text-gray-400">Rearing:</span>{' '}
+                    <span className={(trackingData.tracking_data[currentFrame] as any).rearing ? 'text-red-600 dark:text-red-400 font-bold' : 'text-green-700 dark:text-green-400'}>
                       {(trackingData.tracking_data[currentFrame] as any).rearing ? 'TRUE' : 'FALSE'}
                     </span>
                   </div>
@@ -1040,52 +1040,52 @@ export default function VisualizarResultadosTab(_props: VisualizarResultadosTabP
 
       {/* Legend */}
       {trackingData && videoUrl && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4">Legend</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 border-2 border-green-500"></div>
-              <span className="text-sm text-gray-300">YOLO Detection / Centroid</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">YOLO Detection / Centroid</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 border-2 border-yellow-500"></div>
-              <span className="text-sm text-gray-300">Template Detection</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">Template Detection</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 bg-red-500/60"></div>
-              <span className="text-sm text-gray-300">Trajectory (last 30 frames)</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">Trajectory (last 30 frames)</span>
             </div>
             {hasKeypoints && (
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
-                <span className="text-sm text-gray-300">Keypoints (Pose)</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Keypoints (Pose)</span>
               </div>
             )}
             {hasMask && (
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 bg-pink-500/60 border border-pink-500"></div>
-                <span className="text-sm text-gray-300">Mask (Segmentation)</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">Mask (Segmentation)</span>
               </div>
             )}
             {hasROIs && (
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 border-2 border-cyan-400 border-dashed"></div>
-                <span className="text-sm text-gray-300">ROIs</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">ROIs</span>
               </div>
             )}
             {hasRearingAnalysis && (
               <>
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 border-2 border-red-400 border-dashed"></div>
-                  <span className="text-sm text-gray-300">Lower Edge (Rearing)</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Lower Edge (Rearing)</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 border-2 border-teal-400 border-dashed"></div>
-                  <span className="text-sm text-gray-300">Upper Edge (Rearing)</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Upper Edge (Rearing)</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 bg-red-600"></div>
-                  <span className="text-sm text-gray-300">Rearing Indicator</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Rearing Indicator</span>
                 </div>
               </>
             )}

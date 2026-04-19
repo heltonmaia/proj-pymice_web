@@ -165,7 +165,7 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <Camera className="w-5 h-5 text-primary-500" />
           Video Experiment & Camera Control
@@ -174,13 +174,13 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
         {/* Camera Settings */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Camera Device
             </label>
             <select
               value={selectedDevice}
               onChange={(e) => setSelectedDevice(Number(e.target.value))}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isStreaming}
             >
               {devices.map((device) => (
@@ -192,7 +192,7 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Resolution
             </label>
             <select
@@ -201,7 +201,7 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
                 const [width, height] = e.target.value.split('x').map(Number)
                 setResolution({ width, height })
               }}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isStreaming}
             >
               <option value="640x480">640x480</option>
@@ -235,7 +235,7 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
         </div>
 
         {/* Video Canvas */}
-        <div className="mb-6 bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center" style={{ minHeight: '400px' }}>
+        <div className="mb-6 bg-black rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 flex items-center justify-center" style={{ minHeight: '400px' }}>
           <canvas
             ref={canvasRef}
             className="max-w-full"
@@ -249,7 +249,7 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
             disabled={!isStreaming}
             className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${
               !isStreaming
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                ? 'bg-gray-200 text-gray-500 dark:bg-gray-700 cursor-not-allowed'
                 : isRecording
                 ? 'bg-red-600 hover:bg-red-700 text-white'
                 : 'bg-green-600 hover:bg-green-700 text-white'
@@ -269,9 +269,9 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
           </button>
 
           {isRecording && (
-            <div className="flex items-center gap-2 px-4 py-3 bg-red-900/20 border border-red-600 rounded-lg">
+            <div className="flex items-center gap-2 px-4 py-3 bg-red-100 border border-red-300 dark:bg-red-900/20 dark:border-red-600 rounded-lg">
               <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-red-400 font-medium">Recording: {recordingFilename}</span>
+              <span className="text-red-700 dark:text-red-400 font-medium">Recording: {recordingFilename}</span>
             </div>
           )}
 
@@ -288,32 +288,32 @@ export default function CameraTab({ onTrackingStateChange }: CameraTabProps = {}
       </div>
 
       {/* Info Panel */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold mb-3">Camera Information</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <div className="text-gray-400">Status</div>
-            <div className="font-medium text-white">
+            <div className="text-gray-600 dark:text-gray-400">Status</div>
+            <div className="font-medium text-gray-900 dark:text-white">
               {isStreaming ? (
-                <span className="text-green-400">Streaming</span>
+                <span className="text-green-600 dark:text-green-400">Streaming</span>
               ) : (
-                <span className="text-gray-400">Stopped</span>
+                <span className="text-gray-600 dark:text-gray-400">Stopped</span>
               )}
             </div>
           </div>
           <div>
-            <div className="text-gray-400">Resolution</div>
-            <div className="font-medium text-white">
+            <div className="text-gray-600 dark:text-gray-400">Resolution</div>
+            <div className="font-medium text-gray-900 dark:text-white">
               {resolution.width}x{resolution.height}
             </div>
           </div>
           <div>
-            <div className="text-gray-400">Device</div>
-            <div className="font-medium text-white">Camera {selectedDevice}</div>
+            <div className="text-gray-600 dark:text-gray-400">Device</div>
+            <div className="font-medium text-gray-900 dark:text-white">Camera {selectedDevice}</div>
           </div>
           <div>
-            <div className="text-gray-400">FPS</div>
-            <div className="font-medium text-white">~30</div>
+            <div className="text-gray-600 dark:text-gray-400">FPS</div>
+            <div className="font-medium text-gray-900 dark:text-white">~30</div>
           </div>
         </div>
       </div>

@@ -896,7 +896,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <BarChart3 className="w-5 h-5 text-primary-500" />
           Ethological Analysis
@@ -905,7 +905,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
         {/* File Upload Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Video File
             </label>
             <input
@@ -944,13 +944,13 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   }
                 }
               }}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
+              className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700"
             />
             {videoFile && (
               <div className="mt-2 space-y-1">
-                <p className="text-sm text-green-400">✓ {videoFile.name}</p>
+                <p className="text-sm text-green-700 dark:text-green-400">✓ {videoFile.name}</p>
                 {videoInfo && (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     • Video: ~{videoInfo.frames} frames ({videoInfo.duration.toFixed(2)}s @ {videoInfo.fps} fps)
                   </p>
                 )}
@@ -960,12 +960,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-300">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Tracking Data (JSON)
               </label>
-              <button 
+              <button
                 onClick={() => setShowLargeFileLoader(!showLargeFileLoader)}
-                className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
               >
                 {showLargeFileLoader ? 'Standard Upload' : 'Load Large File (Server)'}
               </button>
@@ -978,16 +978,16 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   placeholder="Paste full path to JSON file on server..."
                   value={serverFilePath}
                   onChange={(e) => setServerFilePath(e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white text-sm"
+                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white text-sm"
                 />
                 <button
                   onClick={handleServerFileLoad}
                   disabled={isAnalyzing || !serverFilePath.trim()}
-                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+                  className="w-full bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:text-gray-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
                 >
                   {isAnalyzing ? 'Loading Large JSON...' : 'Load from Disk'}
                 </button>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Tip: Use this for files &gt; 100MB to avoid browser memory errors.
                 </p>
               </div>
@@ -998,15 +998,15 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   accept=".json"
                   onChange={handleTrackingFileUpload}
                   disabled={uploadProgress !== null}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+                  className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white hover:file:bg-primary-700 disabled:opacity-50"
                 />
                 {uploadProgress !== null && (
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-gray-400">
+                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
                       <span>Uploading to server...</span>
                       <span>{Math.round(uploadProgress)}%</span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
                         className="bg-primary-500 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${uploadProgress}%` }}
@@ -1014,7 +1014,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     </div>
                   </div>
                 )}
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Files &gt; 50MB are automatically processed server-side.
                 </p>
               </div>
@@ -1022,28 +1022,28 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             
             {trackingData && (
               <div className="mt-2 space-y-1">
-                <p className="text-sm text-green-400">
+                <p className="text-sm text-green-700 dark:text-green-400">
                   ✓ {jsonFileName}
                 </p>
-                <p className="text-xs text-gray-400">
-                  • JSON: {trackingData.tracking_data?.length || 0} entries 
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  • JSON: {trackingData.tracking_data?.length || 0} entries
                   {trackingData.video_info?.total_frames && ` (Declared: ${trackingData.video_info.total_frames})`}
                 </p>
                 {trackingData.tracking_data && trackingData.tracking_data.length > 0 && (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     • Max Index: {trackingData.tracking_data[trackingData.tracking_data.length - 1].frame_number}
                   </p>
                 )}
                 {rearingAnalysisType && (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     • {rearingAnalysisType === 'segmentation' ? 'Segmentation' : 'Pose'} detected
                   </p>
                 )}
                 {videoInfo && videoFile && (
                   <div className={`mt-1 p-2 rounded text-xs font-medium ${
                     Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                      : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                      ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-500/20'
+                      : 'bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-500/20'
                   }`}>
                     {Math.abs((trackingData.tracking_data?.length || 0) - videoInfo.frames) <= 2
                       ? '✓ Synchronization OK: Video and JSON match'
@@ -1069,13 +1069,13 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
         </div>
 
         {/* Sub-Tabs Navigation */}
-        <div className="flex gap-2 mb-6 border-b border-gray-600">
+        <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-600">
           <button
             onClick={() => setActiveSubTab('movement')}
             className={`px-4 py-3 border-b-2 transition-colors font-medium ${
               activeSubTab === 'movement'
-                ? 'border-primary-500 text-primary-400 bg-gray-700/30'
-                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/20'
+                ? 'border-primary-500 text-primary-700 dark:text-primary-400 bg-gray-100 dark:bg-gray-700/30'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/20'
             }`}
           >
             Movement
@@ -1084,8 +1084,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             onClick={() => setActiveSubTab('behavioral')}
             className={`px-4 py-3 border-b-2 transition-colors font-medium ${
               activeSubTab === 'behavioral'
-                ? 'border-primary-500 text-primary-400 bg-gray-700/30'
-                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/20'
+                ? 'border-primary-500 text-primary-700 dark:text-primary-400 bg-gray-100 dark:bg-gray-700/30'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/20'
             }`}
           >
             Behavioral
@@ -1094,21 +1094,21 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
         {/* Movement Analysis Tab */}
         {activeSubTab === 'movement' && (
-        <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6 border border-gray-200 dark:border-transparent">
             <div
               className="flex items-center justify-between cursor-pointer hover:bg-gray-600/30 -m-4 p-4 rounded-lg transition-colors"
               onClick={() => setShowSettings(!showSettings)}
             >
               <div>
                 <h3 className="font-semibold text-lg">Movement Analysis</h3>
-                <p className="text-sm text-gray-400 mt-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Select analyses and configure parameters
                 </p>
               </div>
               {showSettings ? (
-                <ChevronUp className="w-5 h-5 text-gray-400" />
+                <ChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               ) : (
-                <ChevronDown className="w-5 h-5 text-gray-400" />
+                <ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               )}
             </div>
 
@@ -1117,8 +1117,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                 {/* Heatmap Card */}
                 <div className={`rounded-lg border transition-all ${
                   movementAnalysisOptions.heatmap
-                    ? 'border-primary-500 bg-gray-800/50'
-                    : 'border-gray-600 bg-gray-800/30'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-gray-800/50'
+                    : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/30'
                 }`}>
                   <label className="flex items-center gap-3 p-4 cursor-pointer">
                     <input
@@ -1128,12 +1128,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="text-white font-medium">Heatmap</span>
-                      <p className="text-xs text-gray-400">Movement density map with trajectory overlay</p>
+                      <span className="text-gray-900 dark:text-white font-medium">Heatmap</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Movement density map with trajectory overlay</p>
                     </div>
                   </label>
                   {movementAnalysisOptions.heatmap && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-700 space-y-4">
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700 space-y-4">
                       {/* Display Options */}
                       <div className="flex gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -1143,7 +1143,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                             onChange={(e) => setHeatmapDisplayOptions({ ...heatmapDisplayOptions, showHeatmapOnly: e.target.checked })}
                             className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                           />
-                          <span className="text-sm text-gray-300">Heatmap Only</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">Heatmap Only</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
@@ -1152,12 +1152,12 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                             onChange={(e) => setHeatmapDisplayOptions({ ...heatmapDisplayOptions, showWithOverlay: e.target.checked })}
                             className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                           />
-                          <span className="text-sm text-gray-300">With Original Image Overlay</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">With Original Image Overlay</span>
                         </label>
                       </div>
 
                       {/* Trajectory Settings */}
-                      <div className="mt-3 pt-3 border-t border-gray-600">
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                         <div className="flex items-center gap-4 mb-3">
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -1166,17 +1166,17 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                               onChange={(e) => setTrajectorySettings({ ...trajectorySettings, showTrajectory: e.target.checked })}
                               className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                             />
-                            <span className="text-sm text-gray-300 font-medium">Show Trajectory</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Show Trajectory</span>
                           </label>
                         </div>
                         {trajectorySettings.showTrajectory && (
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div>
-                              <label className="block text-xs text-gray-400 mb-1">Color</label>
+                              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Color</label>
                               <select
                                 value={trajectorySettings.color}
                                 onChange={(e) => setTrajectorySettings({ ...trajectorySettings, color: e.target.value as typeof trajectorySettings.color })}
-                                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white"
                               >
                                 <option value="white">White</option>
                                 <option value="black">Black</option>
@@ -1186,13 +1186,13 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                               </select>
                             </div>
                             <div>
-                              <label className="block text-xs text-gray-400 mb-1">Width: {trajectorySettings.width.toFixed(1)}</label>
+                              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Width: {trajectorySettings.width.toFixed(1)}</label>
                               <input type="range" min="0.5" max="3" step="0.5" value={trajectorySettings.width}
                                 onChange={(e) => setTrajectorySettings({ ...trajectorySettings, width: parseFloat(e.target.value) })}
                                 className="w-full" />
                             </div>
                             <div>
-                              <label className="block text-xs text-gray-400 mb-1">Opacity: {trajectorySettings.alpha.toFixed(1)}</label>
+                              <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Opacity: {trajectorySettings.alpha.toFixed(1)}</label>
                               <input type="range" min="0.1" max="1" step="0.1" value={trajectorySettings.alpha}
                                 onChange={(e) => setTrajectorySettings({ ...trajectorySettings, alpha: parseFloat(e.target.value) })}
                                 className="w-full" />
@@ -1204,11 +1204,11 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       {/* Parameters */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                          <label className="block text-xs text-gray-400 mb-1">Colormap</label>
+                          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Colormap</label>
                           <select
                             value={heatmapSettings.colormap}
                             onChange={(e) => setHeatmapSettings({ ...heatmapSettings, colormap: e.target.value as HeatmapSettings['colormap'] })}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                            className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-white"
                           >
                             <option value="hot">Hot</option>
                             <option value="viridis">Viridis</option>
@@ -1219,19 +1219,19 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-400 mb-1">Resolution: {heatmapSettings.resolution}</label>
+                          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Resolution: {heatmapSettings.resolution}</label>
                           <input type="range" min="20" max="100" step="10" value={heatmapSettings.resolution}
                             onChange={(e) => setHeatmapSettings({ ...heatmapSettings, resolution: parseInt(e.target.value) })}
                             className="w-full" />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-400 mb-1">Transparency: {heatmapSettings.transparency.toFixed(1)}</label>
+                          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Transparency: {heatmapSettings.transparency.toFixed(1)}</label>
                           <input type="range" min="0" max="1" step="0.1" value={heatmapSettings.transparency}
                             onChange={(e) => setHeatmapSettings({ ...heatmapSettings, transparency: parseFloat(e.target.value) })}
                             className="w-full" />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-400 mb-1">Smoothing: {heatmapSettings.gaussian_sigma?.toFixed(1)}</label>
+                          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Smoothing: {heatmapSettings.gaussian_sigma?.toFixed(1)}</label>
                           <input type="range" min="0" max="3" step="0.5" value={heatmapSettings.gaussian_sigma}
                             onChange={(e) => setHeatmapSettings({ ...heatmapSettings, gaussian_sigma: parseFloat(e.target.value) })}
                             className="w-full" />
@@ -1244,8 +1244,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                 {/* Velocity Analysis Card */}
                 <div className={`rounded-lg border transition-all ${
                   movementAnalysisOptions.velocity
-                    ? 'border-primary-500 bg-gray-800/50'
-                    : 'border-gray-600 bg-gray-800/30'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-gray-800/50'
+                    : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/30'
                 }`}>
                   <label className="flex items-center gap-3 p-4 cursor-pointer">
                     <input
@@ -1255,14 +1255,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="text-white font-medium">Velocity Analysis</span>
-                      <p className="text-xs text-gray-400">Movement speed over time (Window 1 = Instantaneous)</p>
+                      <span className="text-gray-900 dark:text-white font-medium">Velocity Analysis</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Movement speed over time (Window 1 = Instantaneous)</p>
                     </div>
                   </label>
                   {movementAnalysisOptions.velocity && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
                       <div className="mb-2">
-                        <label className="block text-xs text-gray-400 mb-1">
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
                           Smoothing Window: {heatmapSettings.moving_average_window} {heatmapSettings.moving_average_window <= 1 ? '(Instantaneous)' : 'frames'}
                         </label>
                         <input type="range" min="1" max="200" step="1" value={heatmapSettings.moving_average_window}
@@ -1276,8 +1276,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                 {/* Activity Classification Card */}
                 <div className={`rounded-lg border transition-all ${
                   movementAnalysisOptions.activityClassification
-                    ? 'border-primary-500 bg-gray-800/50'
-                    : 'border-gray-600 bg-gray-800/30'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-gray-800/50'
+                    : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/30'
                 }`}>
                   <label className="flex items-center gap-3 p-4 cursor-pointer">
                     <input
@@ -1287,18 +1287,18 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       className="w-5 h-5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="text-white font-medium">Activity Analysis</span>
-                      <p className="text-xs text-gray-400">Velocity histogram and movement classification</p>
+                      <span className="text-gray-900 dark:text-white font-medium">Activity Analysis</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Velocity histogram and movement classification</p>
                     </div>
                   </label>
                   {movementAnalysisOptions.activityClassification && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-700">
+                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile</label>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Movement Threshold: {heatmapSettings.movement_threshold_percentile}th percentile</label>
                         <input type="range" min="50" max="95" step="5" value={heatmapSettings.movement_threshold_percentile}
                           onChange={(e) => setHeatmapSettings({ ...heatmapSettings, movement_threshold_percentile: parseInt(e.target.value) })}
                           className="w-full" />
-                        <p className="text-[10px] text-gray-500 mt-1">Used to differentiate stationary from moving states in the histogram.</p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-1">Used to differentiate stationary from moving states in the histogram.</p>
                       </div>
                     </div>
                   )}
@@ -1307,16 +1307,16 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                 {/* No analysis selected warning */}
                 {!movementAnalysisOptions.heatmap && !movementAnalysisOptions.velocity &&
                  !movementAnalysisOptions.activityClassification && (
-                  <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded text-sm text-orange-200">
+                  <div className="p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-300 dark:border-orange-500/30 rounded text-sm text-orange-700 dark:text-orange-200">
                     Please select at least one analysis to run.
                   </div>
                 )}
 
                 {/* Reset Button */}
-                <div className="pt-4 border-t border-gray-600">
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
                   <button
                     onClick={resetMovementSettings}
-                    className="px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-600/50 rounded transition-colors"
+                    className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-600/50 rounded transition-colors"
                   >
                     Reset Configurations
                   </button>
@@ -1328,21 +1328,21 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
         {/* Behavioral Analysis Tab */}
         {activeSubTab === 'behavioral' && (
-        <div className="bg-gray-700/50 rounded-lg p-4 mb-6">
+        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6 border border-gray-200 dark:border-transparent">
           <div
             className="flex items-center justify-between cursor-pointer hover:bg-gray-600/30 -m-4 p-4 rounded-lg transition-colors"
             onClick={() => setShowBehavioralSettings(!showBehavioralSettings)}
           >
             <div>
               <h3 className="font-semibold text-lg">Behavioral Analysis</h3>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Advanced behavioral classification and pattern recognition
               </p>
             </div>
             {showBehavioralSettings ? (
-              <ChevronUp className="w-5 h-5 text-gray-400" />
+              <ChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             ) : (
-              <ChevronDown className="w-5 h-5 text-gray-400" />
+              <ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             )}
           </div>
 
@@ -1350,7 +1350,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
             <div className="mt-6 space-y-6">
               {/* Test Selection */}
               <div>
-                <h4 className="font-medium text-gray-300 mb-3">Select Behavioral Test</h4>
+                <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Select Behavioral Test</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Open Field */}
                   <button
@@ -1358,11 +1358,11 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     className={`p-4 rounded-lg border-2 transition-all text-left ${
                       selectedBehavioralTest === 'open_field'
                         ? 'border-primary-500 bg-primary-500/10'
-                        : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+                        : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/30 hover:border-gray-400 dark:hover:border-gray-500'
                     }`}
                   >
-                    <h5 className="font-semibold text-white mb-1">OPEN FIELD (Round)</h5>
-                    <p className="text-sm text-gray-400">Circular arena behavior analysis</p>
+                    <h5 className="font-semibold text-gray-900 dark:text-white mb-1">OPEN FIELD (Round)</h5>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Circular arena behavior analysis</p>
                   </button>
 
                   {/* Elevated Plus Maze */}
@@ -1371,19 +1371,19 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     className={`p-4 rounded-lg border-2 transition-all text-left ${
                       selectedBehavioralTest === 'elevated_plus_maze'
                         ? 'border-primary-500 bg-primary-500/10'
-                        : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+                        : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/30 hover:border-gray-400 dark:hover:border-gray-500'
                     }`}
                   >
-                    <h5 className="font-semibold text-white mb-1">ELEVATED PLUS MAZE</h5>
-                    <p className="text-sm text-gray-400">Anxiety and exploration test</p>
+                    <h5 className="font-semibold text-gray-900 dark:text-white mb-1">ELEVATED PLUS MAZE</h5>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Anxiety and exploration test</p>
                   </button>
                 </div>
               </div>
 
               {/* Open Field Analyses */}
               {selectedBehavioralTest === 'open_field' && (
-                <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
-                  <h4 className="font-medium text-gray-300 mb-3">Open Field Analyses</h4>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                  <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Open Field Analyses</h4>
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-600/20 p-2 rounded transition-colors">
                       <input
@@ -1393,23 +1393,23 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div className="flex-1">
-                        <span className="text-white font-medium">Rearing</span>
-                        <p className="text-xs text-gray-400">Requires 2 ROIs (lower edge and upper edge). Rearing is detected when the animal's center of mass is between these two boundaries (outside lower edge, inside upper edge)</p>
+                        <span className="text-gray-900 dark:text-white font-medium">Rearing</span>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">Requires 2 ROIs (lower edge and upper edge). Rearing is detected when the animal's center of mass is between these two boundaries (outside lower edge, inside upper edge)</p>
                       </div>
                     </label>
 
                     {/* Rearing Configuration Panel */}
                     {openFieldAnalyses.rearing && (
-                      <div className="ml-7 mt-3 p-4 bg-gray-600/20 rounded-lg border border-gray-600">
-                        <h5 className="font-medium text-white mb-3">Rearing Analysis Configuration</h5>
+                      <div className="ml-7 mt-3 p-4 bg-gray-100 dark:bg-gray-600/20 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <h5 className="font-medium text-gray-900 dark:text-white mb-3">Rearing Analysis Configuration</h5>
 
                         {/* Data Type Detection */}
                         {rearingAnalysisType && (
-                          <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded">
-                            <p className="text-sm text-blue-300">
+                          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-300 dark:border-blue-500/30 rounded">
+                            <p className="text-sm text-blue-700 dark:text-blue-300">
                               <strong>Detected:</strong> {rearingAnalysisType === 'segmentation' ? 'Segmentation' : 'Pose Detection'} data
                             </p>
-                            <p className="text-xs text-blue-200 mt-1">
+                            <p className="text-xs text-blue-600 dark:text-blue-200 mt-1">
                               {rearingAnalysisType === 'segmentation'
                                 ? 'Using centroid position to detect rearing'
                                 : 'Using keypoints to detect rearing'}
@@ -1419,7 +1419,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
                         {/* Auto-loaded Frame Status */}
                         {rearingFrameImage && (
-                          <div className="mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded text-sm text-green-300">
+                          <div className="mb-3 p-2 bg-green-50 dark:bg-green-500/10 border border-green-300 dark:border-green-500/30 rounded text-sm text-green-700 dark:text-green-300">
                             ✓ First frame loaded - Use ROI toolbar above the video in Analysis Preview section below
                           </div>
                         )}
@@ -1430,10 +1430,10 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                             {/* ROI List */}
                             {rearingROIs.length > 0 && (
                               <div className="space-y-2">
-                                <span className="text-sm font-medium text-gray-300">ROIs Created ({rearingROIs.length})</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">ROIs Created ({rearingROIs.length})</span>
                                 <div className="space-y-1">
                                   {rearingROIs.map(roi => (
-                                    <div key={roi.id} className="text-xs text-gray-400 flex items-center justify-between bg-gray-700/50 p-2 rounded">
+                                    <div key={roi.id} className="text-xs text-gray-600 dark:text-gray-400 flex items-center justify-between bg-gray-100 dark:bg-gray-700/50 p-2 rounded">
                                       <span>
                                         <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
                                           roi.name === 'lower_edge' ? 'bg-red-500' :
@@ -1450,14 +1450,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
                             {/* Minimum ROI Warning */}
                             {rearingROIs.length < 2 && (
-                              <div className="p-2 bg-orange-500/10 border border-orange-500/30 rounded text-xs text-orange-200">
+                              <div className="p-2 bg-orange-50 dark:bg-orange-500/10 border border-orange-300 dark:border-orange-500/30 rounded text-xs text-orange-700 dark:text-orange-200">
                                 ⚠️ Both ROIs required (lower edge + upper edge). Rearing = when animal is between them. Use toolbar above video to draw ROIs.
                               </div>
                             )}
 
                             {/* Ready Status */}
                             {rearingROIs.length >= 2 && (
-                              <div className="p-2 bg-green-500/10 border border-green-500/30 rounded text-xs text-green-200">
+                              <div className="p-2 bg-green-50 dark:bg-green-500/10 border border-green-300 dark:border-green-500/30 rounded text-xs text-green-700 dark:text-green-200">
                                 ✓ Ready for analysis! Click "Run Behavioral Analysis" button below.
                               </div>
                             )}
@@ -1475,8 +1475,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Edge Jumps</span>
-                        <p className="text-xs text-gray-500">Track jumping attempts at arena borders (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Edge Jumps</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Track jumping attempts at arena borders (Coming soon)</p>
                       </div>
                     </label>
 
@@ -1489,8 +1489,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Resting</span>
-                        <p className="text-xs text-gray-500">Identify stationary/resting periods (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Resting</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Identify stationary/resting periods (Coming soon)</p>
                       </div>
                     </label>
 
@@ -1503,8 +1503,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Grooming</span>
-                        <p className="text-xs text-gray-500">Detect self-grooming behavior (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Grooming</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Detect self-grooming behavior (Coming soon)</p>
                       </div>
                     </label>
                   </div>
@@ -1513,8 +1513,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
               {/* Elevated Plus Maze Content */}
               {selectedBehavioralTest === 'elevated_plus_maze' && (
-                <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
-                  <h4 className="font-medium text-gray-300 mb-3">Elevated Plus Maze Analyses</h4>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                  <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Elevated Plus Maze Analyses</h4>
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 p-2 rounded opacity-50 cursor-not-allowed">
                       <input
@@ -1525,8 +1525,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Sudden Run</span>
-                        <p className="text-xs text-gray-500">Detect sudden rapid movements (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Sudden Run</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Detect sudden rapid movements (Coming soon)</p>
                       </div>
                     </label>
 
@@ -1539,8 +1539,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Panoramic View</span>
-                        <p className="text-xs text-gray-500">Track head scanning and environment observation (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Panoramic View</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Track head scanning and environment observation (Coming soon)</p>
                       </div>
                     </label>
 
@@ -1553,8 +1553,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Head Dips</span>
-                        <p className="text-xs text-gray-500">Identify head dipping over edges (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Head Dips</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Identify head dipping over edges (Coming soon)</p>
                       </div>
                     </label>
 
@@ -1567,8 +1567,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         className="w-4 h-4 rounded border-gray-600 text-primary-600 focus:ring-primary-500 focus:ring-offset-gray-800"
                       />
                       <div>
-                        <span className="text-gray-400 font-medium">Grooming</span>
-                        <p className="text-xs text-gray-500">Detect self-grooming behavior (Coming soon)</p>
+                        <span className="text-gray-500 dark:text-gray-400 font-medium">Grooming</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">Detect self-grooming behavior (Coming soon)</p>
                       </div>
                     </label>
                   </div>
@@ -1599,7 +1599,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                  !elevatedPlusMazeAnalyses.suddenRun && !elevatedPlusMazeAnalyses.panoramicView && !elevatedPlusMazeAnalyses.headDips && !elevatedPlusMazeAnalyses.grooming)
               ))
             }
-            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <ImageIcon className="w-5 h-5" />
             {isAnalyzing ? 'Running Analysis...' : `Run ${activeSubTab === 'behavioral' ? 'Behavioral' : 'Movement'} Analysis`}
@@ -1747,7 +1747,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
               }
             }}
             disabled={!trackingData || !analysisCompleted}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
           >
             <Download className="w-5 h-5" />
             Download Results
@@ -1757,14 +1757,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
       {/* Results Preview */}
       {(trackingData || rearingFrameImage) && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4">Analysis Preview</h3>
 
           {/* ROI Drawing Toolbar */}
           {showRearingSetup && (
-            <div className="mb-4 p-3 bg-gray-700/50 rounded-lg border border-gray-600">
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm font-medium text-gray-300">ROI Tools:</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">ROI Tools:</span>
 
                 {/* ROI Selection Buttons */}
                 <button
@@ -1775,7 +1775,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
                     isDrawingROI && currentROIName === 'lower_edge'
                       ? 'bg-red-600 text-white'
-                      : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+                      : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-200'
                   }`}
                 >
                   + Lower Edge
@@ -1789,7 +1789,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
                     isDrawingROI && currentROIName === 'upper_edge'
                       ? 'bg-teal-600 text-white'
-                      : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+                      : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-200'
                   }`}
                 >
                   + Upper Edge
@@ -1803,14 +1803,14 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
                     isDrawingROI && currentROIName === 'central_area'
                       ? 'bg-green-600 text-white'
-                      : 'bg-gray-600 text-gray-200 hover:bg-gray-500'
+                      : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-200'
                   }`}
                 >
                   + Central Area
                 </button>
 
                 {/* Separator */}
-                <div className="h-8 w-px bg-gray-600"></div>
+                <div className="h-8 w-px bg-gray-300 dark:bg-gray-600"></div>
 
                 {/* Clear ROIs Button */}
                 {rearingROIs.length > 0 && (
@@ -1842,7 +1842,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
                 {/* Drawing Instructions */}
                 {isDrawingROI && (
-                  <div className="w-full mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-xs text-yellow-200">
+                  <div className="w-full mt-2 p-2 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-300 dark:border-yellow-500/30 rounded text-xs text-yellow-700 dark:text-yellow-200">
                     Click and drag on the video below to draw a circular ROI
                   </div>
                 )}
@@ -1851,7 +1851,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           )}
 
           {/* Video Canvas */}
-          <div className="bg-black rounded-lg overflow-hidden border border-gray-700 flex items-center justify-center" style={{ minHeight: '400px' }}>
+          <div className="bg-black rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700 flex items-center justify-center" style={{ minHeight: '400px' }}>
             <canvas
               ref={canvasRef}
               onClick={showRearingSetup ? handleRearingCanvasClick : undefined}
@@ -1863,23 +1863,23 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
           {/* Statistics - Only show when trackingData is loaded */}
           {trackingData && (
             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="text-sm text-gray-400">Total Frames</div>
-                <div className="text-2xl font-bold text-white">{trackingData.video_info.total_frames}</div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                <div className="text-sm text-gray-600 dark:text-gray-400">Total Frames</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">{trackingData.video_info.total_frames}</div>
               </div>
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="text-sm text-gray-400">YOLO Detections</div>
-                <div className="text-2xl font-bold text-green-400">{trackingData.statistics.yolo_detections}</div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                <div className="text-sm text-gray-600 dark:text-gray-400">YOLO Detections</div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{trackingData.statistics.yolo_detections}</div>
               </div>
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="text-sm text-gray-400">Template Detections</div>
-                <div className="text-2xl font-bold text-yellow-400">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                <div className="text-sm text-gray-600 dark:text-gray-400">Template Detections</div>
+                <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                   {trackingData.statistics.template_detections}
                 </div>
               </div>
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="text-sm text-gray-400">Missed Frames</div>
-                <div className="text-2xl font-bold text-red-400">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-transparent">
+                <div className="text-sm text-gray-600 dark:text-gray-400">Missed Frames</div>
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {trackingData.statistics.frames_without_detection}
                 </div>
               </div>
@@ -1890,16 +1890,16 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
 
       {/* Analysis Log */}
       {analysisLogs.length > 0 && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4">Analysis Log</h3>
-          <div className="bg-black rounded-lg p-4 border border-gray-700 max-h-64 overflow-y-auto font-mono text-sm">
+          <div className="bg-gray-50 dark:bg-black rounded-lg p-4 border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto font-mono text-sm">
             {analysisLogs.map((log, index) => (
               <div key={index} className={`mb-1 ${
-                log.type === 'error' ? 'text-red-400' :
-                log.type === 'success' ? 'text-green-400' :
-                'text-gray-300'
+                log.type === 'error' ? 'text-red-600 dark:text-red-400' :
+                log.type === 'success' ? 'text-green-700 dark:text-green-400' :
+                'text-gray-700 dark:text-gray-300'
               }`}>
-                <span className="text-gray-500">[{log.time}]</span> {log.message}
+                <span className="text-gray-500 dark:text-gray-500">[{log.time}]</span> {log.message}
               </div>
             ))}
             <div ref={logsEndRef} />

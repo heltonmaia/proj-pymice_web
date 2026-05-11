@@ -34,43 +34,57 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def filter_velocity_outliers(velocities, time_points, k=3.0, enabled=True):
-    """Remove upper-tail velocity spikes using Median + k·MAD, with linear
-    interpolation between non-outlier neighbors.
+    """Remove upper-tail velocity spikes from a per-frame velocity series.
 
-    Returns (cleaned_velocities, outlier_mask). Pass-through when disabled,
-    when MAD is 0 (constant signal), or when fewer than 3 samples.
+    Robust scale: prefers Median Absolute Deviation, falls back to the central
+    90% inter-percentile range (p95−p5)/3.29 when MAD collapses. The fallback
+    is needed because tracker quantization (integer-pixel steps at a fixed
+    frame rate) clusters most legitimate movement at the same velocity
+    quantum, driving MAD toward zero. Computed on positive velocities only —
+    stationary frames (v == 0) carry no information about movement spread.
+
+    Both scales are normalized to match Gaussian σ:
+      MAD * 1.4826 ≈ σ   (for normal data)
+      (p95 − p5) / 3.29 ≈ σ   (for normal data)
+
+    Returns (cleaned, mask). Pass-through when disabled, len<3, fewer than
+    3 positive samples, or when both scale estimators are zero.
     """
     if not enabled or len(velocities) < 3:
         print(f"[outlier_filter] SKIP enabled={enabled} N={len(velocities)}")
         return velocities, np.zeros_like(velocities, dtype=bool)
 
-    med = float(np.median(velocities))
-    mad = float(np.median(np.abs(velocities - med)))
-    if mad == 0:
-        # Zero-inflated case (stationary subject ⇒ >50% frames at velocity 0
-        # collapse median and MAD to 0). Re-estimate scale on positive
-        # velocities to recover the movement bulk.
-        positive = velocities[velocities > 0]
-        if len(positive) < 3:
-            print(f"[outlier_filter] SKIP mad=0 positive<3 N={len(velocities)}")
-            return velocities, np.zeros_like(velocities, dtype=bool)
-        med = float(np.median(positive))
-        mad = float(np.median(np.abs(positive - med)))
-        if mad == 0:
-            print(f"[outlier_filter] SKIP mad=0 (both passes) N={len(velocities)}")
-            return velocities, np.zeros_like(velocities, dtype=bool)
+    positive = velocities[velocities > 0]
+    if len(positive) < 3:
+        print(f"[outlier_filter] SKIP positive<3 N={len(velocities)}")
+        return velocities, np.zeros_like(velocities, dtype=bool)
 
-    # 1.4826 scales MAD to be consistent with std for normal data,
-    # so k reads as "k standard deviations".
-    threshold = med + k * 1.4826 * mad
-    mask = velocities > threshold  # upper tail only; mediana garante ¬mask.all()
+    med = float(np.median(positive))
+    mad_scale = float(np.median(np.abs(positive - med))) * 1.4826
+    # Upper-tail fallback for quantized data (tracker outputs integer-pixel
+    # steps at fixed fps → most movement frames cluster on the same velocity,
+    # collapsing MAD). p99 captures the extent of legitimate fast movement
+    # and is reliable only when the dataset is large enough that p99 isn't
+    # dominated by the spikes themselves (rare events <<1% of frames).
+    # Normalization 2.326 makes (p99 − med) ≈ σ for Gaussian data.
+    scale = mad_scale
+    if len(positive) >= 500:
+        pct_scale = max(0.0, (float(np.percentile(positive, 99)) - med) / 2.326)
+        scale = max(mad_scale, pct_scale)
+
+    if scale == 0:
+        print(f"[outlier_filter] SKIP scale=0 N={len(velocities)} med={med:.2f}")
+        return velocities, np.zeros_like(velocities, dtype=bool)
+
+    threshold = med + k * scale
+    mask = velocities > threshold  # upper tail only
 
     cleaned = np.interp(time_points, time_points[~mask], velocities[~mask])
     print(
         f"[outlier_filter] enabled=True k={k} N={len(velocities)} "
-        f"med={med:.2f} mad={mad:.2f} threshold={threshold:.2f} "
-        f"flagged={int(mask.sum())} raw_max={float(velocities.max()):.1f} "
-        f"cleaned_max={float(cleaned.max()):.1f}"
+        f"med={med:.2f} mad_scale={mad_scale:.2f} scale={scale:.2f} "
+        f"threshold={threshold:.2f} flagged={int(mask.sum())} "
+        f"raw_max={float(velocities.max()):.1f} cleaned_max={float(cleaned.max()):.1f}"
     )
     return cleaned, mask
 

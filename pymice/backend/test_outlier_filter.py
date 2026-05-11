@@ -75,6 +75,37 @@ def test_zero_inflated_with_spike():
     assert cleaned.max() < 100.0, f"cleaned max too high: {cleaned.max()}"
 
 
+def test_quantized_movement_with_spike():
+    # Matches the real user data shape (logged: med=30.12 mad=0.22).
+    # Heavy quantization: >95% of moving frames sit exactly on the 30 px/s
+    # quantum (1 px/frame at 30 fps with integer-pixel detection).
+    # Only ~5% of moving frames carry real spread up to ~200 px/s.
+    # MAD collapses to near zero, so the old algorithm clips at ~30 px/s.
+    # The new algorithm must use a percentile-based scale and preserve real
+    # movement while catching the tracking-glitch spikes.
+    rng = np.random.default_rng(42)
+    N = 5000
+    v = np.zeros(N)
+    # 30% of frames are moving (matches typical mostly-stationary recording);
+    # this puts >50% of all velocities at exactly zero so median(all)==0.
+    move_idx = rng.choice(N, size=int(N * 0.30), replace=False)
+    quantum_mask = rng.random(len(move_idx)) < 0.95
+    v[move_idx[quantum_mask]] = 30.0
+    other = move_idx[~quantum_mask]
+    v[other] = rng.uniform(30.0, 200.0, size=len(other))
+    spike_idx = [500, 1500, 3000, 4200]
+    v[spike_idx] = 6000.0
+    t = np.linspace(0.0, N / 30.0, N)
+
+    cleaned, mask = filter_velocity_outliers(v, t, k=3.0, enabled=True)
+    for i in spike_idx:
+        assert mask[i], f"spike at idx {i} must be flagged"
+    assert cleaned.max() < 500.0, f"cleaned max suggests spikes survived: {cleaned.max()}"
+    assert cleaned.max() > 100.0, (
+        f"cleaned max too aggressive — legit movement was clipped: {cleaned.max()}"
+    )
+
+
 def test_k_controls_sensitivity():
     # Same spike: a permissive k (large) must catch fewer outliers than strict (small).
     v = np.array([2.0, 2.1, 1.9, 2.0, 6.0, 2.0, 2.1, 1.9, 2.0])
@@ -93,6 +124,7 @@ if __name__ == "__main__":
         test_constant_signal_mad_zero,
         test_short_array_passthrough,
         test_zero_inflated_with_spike,
+        test_quantized_movement_with_spike,
         test_k_controls_sensitivity,
     ]
     failed = 0

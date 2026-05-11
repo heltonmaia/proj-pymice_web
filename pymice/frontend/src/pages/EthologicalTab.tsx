@@ -21,6 +21,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     velocity_bins: 50,
     gaussian_sigma: 1.0,
     moving_average_window: 30,
+    outlier_filter_enabled: true,
+    outlier_filter_k: 3.0,
   })
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<string | null>(null)
@@ -59,6 +61,8 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
     velocity_bins: 50,
     gaussian_sigma: 1.0,
     moving_average_window: 30,
+    outlier_filter_enabled: true,
+    outlier_filter_k: 3.0,
   }
 
   const resetMovementSettings = () => {
@@ -1268,6 +1272,27 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                         <input type="range" min="1" max="200" step="1" value={heatmapSettings.moving_average_window}
                           onChange={(e) => setHeatmapSettings({ ...heatmapSettings, moving_average_window: parseInt(e.target.value) })}
                           className="w-full" />
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                          <input
+                            type="checkbox"
+                            checked={heatmapSettings.outlier_filter_enabled ?? true}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, outlier_filter_enabled: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">Outlier Filter (Median + k·MAD)</span>
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-500 mb-2 ml-6">Removes spikes from tracking glitches</p>
+                        <div className={(heatmapSettings.outlier_filter_enabled ?? true) ? '' : 'opacity-40 pointer-events-none'}>
+                          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                            Threshold: k = {(heatmapSettings.outlier_filter_k ?? 3.0).toFixed(1)}
+                          </label>
+                          <input type="range" min="1" max="10" step="0.5"
+                            value={heatmapSettings.outlier_filter_k ?? 3.0}
+                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, outlier_filter_k: parseFloat(e.target.value) })}
+                            className="w-full" />
+                        </div>
                       </div>
                     </div>
                   )}

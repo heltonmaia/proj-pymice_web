@@ -155,6 +155,8 @@ class HeatmapSettings(BaseModel):
     velocity_bins: int = Field(default=50, ge=20, le=100)
     gaussian_sigma: float = Field(default=1.0, ge=0.0, le=3.0)
     moving_average_window: int = Field(default=30, ge=5, le=200)
+    outlier_filter_enabled: bool = True
+    outlier_filter_k: float = Field(default=3.0, ge=1.0, le=10.0)
 
 
 class HeatmapDisplayOptions(BaseModel):

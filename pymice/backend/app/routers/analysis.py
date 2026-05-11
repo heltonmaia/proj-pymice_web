@@ -33,6 +33,30 @@ TEMP_DIR = Path("temp/analysis")
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def filter_velocity_outliers(velocities, time_points, k=3.0, enabled=True):
+    """Remove upper-tail velocity spikes using Median + k·MAD, with linear
+    interpolation between non-outlier neighbors.
+
+    Returns (cleaned_velocities, outlier_mask). Pass-through when disabled,
+    when MAD is 0 (constant signal), or when fewer than 3 samples.
+    """
+    if not enabled or len(velocities) < 3:
+        return velocities, np.zeros_like(velocities, dtype=bool)
+
+    med = np.median(velocities)
+    mad = np.median(np.abs(velocities - med))
+    if mad == 0:
+        return velocities, np.zeros_like(velocities, dtype=bool)
+
+    # 1.4826 scales MAD to be consistent with std for normal data,
+    # so k reads as "k standard deviations".
+    threshold = med + k * 1.4826 * mad
+    mask = velocities > threshold  # upper tail only; mediana garante ¬mask.all()
+
+    cleaned = np.interp(time_points, time_points[~mask], velocities[~mask])
+    return cleaned, mask
+
+
 @router.get("/load-large-json")
 async def load_large_json(file_path: str):
     """
@@ -251,11 +275,17 @@ async def analyze_movement(tracking_data: TrackingData):
                 velocities.append(0)
 
         velocities = np.array(velocities)
+        time_points = timestamps[1:]
+        dt_arr = np.diff(timestamps)
 
-        # Calculate statistics
-        total_distance = np.sum([np.sqrt((x_coords[i] - x_coords[i-1])**2 +
-                                         (y_coords[i] - y_coords[i-1])**2)
-                                 for i in range(1, len(x_coords))])
+        velocities, _ = filter_velocity_outliers(
+            velocities, time_points,
+            k=settings.outlier_filter_k,
+            enabled=settings.outlier_filter_enabled,
+        )
+
+        # total_distance derived from cleaned velocities so spikes don't inflate it
+        total_distance = float(np.sum(velocities * dt_arr))
 
         movement_threshold = np.percentile(velocities, settings.movement_threshold_percentile) if len(velocities) > 0 else 0
         moving_frames = velocities > movement_threshold
@@ -267,7 +297,6 @@ async def analyze_movement(tracking_data: TrackingData):
 
         # Plot 1: Velocity over time
         ax1 = fig.add_subplot(gs[0, :])
-        time_points = timestamps[1:]  # Skip first frame
         ax1.plot(time_points, velocities, 'g-', linewidth=1, alpha=0.7, label='Velocity')
         
         # Add moving average if window allows
@@ -474,13 +503,20 @@ async def generate_complete_analysis(request: HeatmapRequest):
         dt = np.diff(timestamps)
         
         dist_consecutive = np.sqrt(dx**2 + dy**2)
-        total_distance = np.sum(dist_consecutive)
-        
+
         # Safe velocity calculation
         safe_dt = np.where(dt > 0, dt, 1.0)
         velocities = np.where(dt > 0, dist_consecutive / safe_dt, 0.0)
         time_points = timestamps[1:]
-        
+
+        velocities, _ = filter_velocity_outliers(
+            velocities, time_points,
+            k=settings.outlier_filter_k,
+            enabled=settings.outlier_filter_enabled,
+        )
+        total_distance = float(np.sum(velocities * dt))
+
+
         # Calculate threshold and moving average
         movement_threshold = np.percentile(velocities, settings.movement_threshold_percentile) if len(velocities) > 0 else 0
         window = settings.moving_average_window
@@ -639,13 +675,20 @@ async def download_complete_analysis(request: HeatmapRequest):
         dt = np.diff(timestamps)
         
         dist_consecutive = np.sqrt(dx**2 + dy**2)
-        total_distance = np.sum(dist_consecutive)
-        
+
         # Safe velocity calculation
         safe_dt = np.where(dt > 0, dt, 1.0)
         velocities = np.where(dt > 0, dist_consecutive / safe_dt, 0.0)
         time_points = timestamps[1:]
-        
+
+        velocities, _ = filter_velocity_outliers(
+            velocities, time_points,
+            k=settings.outlier_filter_k,
+            enabled=settings.outlier_filter_enabled,
+        )
+        total_distance = float(np.sum(velocities * dt))
+
+
         # Calculate threshold and moving average
         movement_threshold = np.percentile(velocities, settings.movement_threshold_percentile) if len(velocities) > 0 else 0
         window = settings.moving_average_window

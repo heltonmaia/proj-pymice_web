@@ -125,6 +125,8 @@ export interface HeatmapSettings {
   velocity_bins?: number;
   gaussian_sigma?: number;
   moving_average_window?: number;
+  outlier_filter_enabled?: boolean;
+  outlier_filter_k?: number;
 }
 
 // API Response Types

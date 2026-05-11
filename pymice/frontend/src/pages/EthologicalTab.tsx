@@ -1264,35 +1264,33 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                     </div>
                   </label>
                   {movementAnalysisOptions.velocity && (
-                    <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div className="mb-2">
+                    <div className="px-4 pb-3 pt-2 border-t border-gray-200 dark:border-gray-700 grid grid-cols-2 gap-3">
+                      <div>
                         <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
-                          Smoothing Window: {heatmapSettings.moving_average_window} {heatmapSettings.moving_average_window <= 1 ? '(Instantaneous)' : 'frames'}
+                          Smoothing Window: {heatmapSettings.moving_average_window} {(heatmapSettings.moving_average_window ?? 0) <= 1 ? '(Instant)' : 'frames'}
                         </label>
                         <input type="range" min="1" max="200" step="1" value={heatmapSettings.moving_average_window}
                           onChange={(e) => setHeatmapSettings({ ...heatmapSettings, moving_average_window: parseInt(e.target.value) })}
                           className="w-full" />
                       </div>
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <label className="flex items-center gap-2 cursor-pointer mb-2">
+                      <div>
+                        <label
+                          className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 mb-1 cursor-pointer"
+                          title="Median + k·MAD — removes spikes from tracking glitches"
+                        >
                           <input
                             type="checkbox"
                             checked={heatmapSettings.outlier_filter_enabled ?? true}
                             onChange={(e) => setHeatmapSettings({ ...heatmapSettings, outlier_filter_enabled: e.target.checked })}
-                            className="w-4 h-4 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
+                            className="w-3.5 h-3.5 rounded border-gray-500 text-primary-600 focus:ring-primary-500"
                           />
-                          <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">Outlier Filter (Median + k·MAD)</span>
+                          <span>Outlier Filter: k = {(heatmapSettings.outlier_filter_k ?? 3.0).toFixed(1)}</span>
                         </label>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mb-2 ml-6">Removes spikes from tracking glitches</p>
-                        <div className={(heatmapSettings.outlier_filter_enabled ?? true) ? '' : 'opacity-40 pointer-events-none'}>
-                          <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
-                            Threshold: k = {(heatmapSettings.outlier_filter_k ?? 3.0).toFixed(1)}
-                          </label>
-                          <input type="range" min="1" max="10" step="0.5"
-                            value={heatmapSettings.outlier_filter_k ?? 3.0}
-                            onChange={(e) => setHeatmapSettings({ ...heatmapSettings, outlier_filter_k: parseFloat(e.target.value) })}
-                            className="w-full" />
-                        </div>
+                        <input type="range" min="1" max="10" step="0.5"
+                          value={heatmapSettings.outlier_filter_k ?? 3.0}
+                          disabled={!(heatmapSettings.outlier_filter_enabled ?? true)}
+                          onChange={(e) => setHeatmapSettings({ ...heatmapSettings, outlier_filter_k: parseFloat(e.target.value) })}
+                          className="w-full disabled:opacity-40" />
                       </div>
                     </div>
                   )}

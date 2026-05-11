@@ -1245,6 +1245,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                   )}
                 </div>
 
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Velocity Analysis Card */}
                 <div className={`rounded-lg border transition-all ${
                   movementAnalysisOptions.velocity
@@ -1325,6 +1326,7 @@ export default function EthologicalTab({ onTrackingStateChange }: EthologicalTab
                       </div>
                     </div>
                   )}
+                </div>
                 </div>
 
                 {/* No analysis selected warning */}

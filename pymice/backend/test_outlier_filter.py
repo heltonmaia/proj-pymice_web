@@ -56,6 +56,25 @@ def test_short_array_passthrough():
     np.testing.assert_array_equal(cleaned, v)
 
 
+def test_zero_inflated_with_spike():
+    # Real-world case: mouse stationary >50% of frames (velocity == 0),
+    # bulk movement ~10 px/s, occasional spike at 1000 px/s.
+    # Median and MAD both collapse to 0; filter must still catch the spike.
+    rng = np.random.default_rng(0)
+    N = 1000
+    v = np.zeros(N)
+    move_idx = rng.choice(N, size=N // 3, replace=False)  # 33% active frames
+    v[move_idx] = rng.uniform(5.0, 15.0, size=len(move_idx))
+    spike_idx = [100, 500, 800]
+    v[spike_idx] = 1000.0
+    t = np.linspace(0.0, N / 30.0, N)
+
+    cleaned, mask = filter_velocity_outliers(v, t, k=3.0, enabled=True)
+    for i in spike_idx:
+        assert mask[i], f"spike at idx {i} must be flagged (zero-inflated case)"
+    assert cleaned.max() < 100.0, f"cleaned max too high: {cleaned.max()}"
+
+
 def test_k_controls_sensitivity():
     # Same spike: a permissive k (large) must catch fewer outliers than strict (small).
     v = np.array([2.0, 2.1, 1.9, 2.0, 6.0, 2.0, 2.1, 1.9, 2.0])
@@ -73,6 +92,7 @@ if __name__ == "__main__":
         test_low_values_not_filtered,
         test_constant_signal_mad_zero,
         test_short_array_passthrough,
+        test_zero_inflated_with_spike,
         test_k_controls_sensitivity,
     ]
     failed = 0

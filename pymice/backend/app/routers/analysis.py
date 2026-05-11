@@ -41,12 +41,24 @@ def filter_velocity_outliers(velocities, time_points, k=3.0, enabled=True):
     when MAD is 0 (constant signal), or when fewer than 3 samples.
     """
     if not enabled or len(velocities) < 3:
+        print(f"[outlier_filter] SKIP enabled={enabled} N={len(velocities)}")
         return velocities, np.zeros_like(velocities, dtype=bool)
 
-    med = np.median(velocities)
-    mad = np.median(np.abs(velocities - med))
+    med = float(np.median(velocities))
+    mad = float(np.median(np.abs(velocities - med)))
     if mad == 0:
-        return velocities, np.zeros_like(velocities, dtype=bool)
+        # Zero-inflated case (stationary subject ⇒ >50% frames at velocity 0
+        # collapse median and MAD to 0). Re-estimate scale on positive
+        # velocities to recover the movement bulk.
+        positive = velocities[velocities > 0]
+        if len(positive) < 3:
+            print(f"[outlier_filter] SKIP mad=0 positive<3 N={len(velocities)}")
+            return velocities, np.zeros_like(velocities, dtype=bool)
+        med = float(np.median(positive))
+        mad = float(np.median(np.abs(positive - med)))
+        if mad == 0:
+            print(f"[outlier_filter] SKIP mad=0 (both passes) N={len(velocities)}")
+            return velocities, np.zeros_like(velocities, dtype=bool)
 
     # 1.4826 scales MAD to be consistent with std for normal data,
     # so k reads as "k standard deviations".
@@ -54,6 +66,12 @@ def filter_velocity_outliers(velocities, time_points, k=3.0, enabled=True):
     mask = velocities > threshold  # upper tail only; mediana garante ¬mask.all()
 
     cleaned = np.interp(time_points, time_points[~mask], velocities[~mask])
+    print(
+        f"[outlier_filter] enabled=True k={k} N={len(velocities)} "
+        f"med={med:.2f} mad={mad:.2f} threshold={threshold:.2f} "
+        f"flagged={int(mask.sum())} raw_max={float(velocities.max()):.1f} "
+        f"cleaned_max={float(cleaned.max()):.1f}"
+    )
     return cleaned, mask
 
 

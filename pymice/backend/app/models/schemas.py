@@ -211,3 +211,77 @@ class YOLOTestResult(BaseModel):
     gpu_time: float
     cpu_time: float
     speedup: float
+
+
+# --- Experiment Recording (live) ---
+
+class TriggerMatch(BaseModel):
+    event_type: Literal["roi_entry", "roi_exit", "tick", "frame_drop"]
+    roi_name: Optional[str] = None
+    min_dwell_sec: Optional[float] = None
+    cooldown_sec: Optional[float] = 0.0
+
+
+class TriggerAction(BaseModel):
+    integration_id: Optional[str] = None  # required unless kind == "log"
+    kind: Literal["integration", "log"] = "integration"
+    payload: Optional[Union[str, dict]] = None
+    label: Optional[str] = None  # for kind="log"
+    timeout_sec: float = 2.0
+
+
+class TriggerRule(BaseModel):
+    id: str
+    name: str
+    match: TriggerMatch
+    action: TriggerAction
+
+
+class IntegrationConfigSerial(BaseModel):
+    port: str
+    baud: int = 115200
+    newline: str = "\n"
+
+
+class IntegrationConfigHttp(BaseModel):
+    base_url: str
+    default_method: Literal["GET", "POST", "PUT"] = "POST"
+    default_timeout_sec: float = 2.0
+    headers: dict = Field(default_factory=dict)
+
+
+class Integration(BaseModel):
+    id: str
+    name: str
+    kind: Literal["serial", "http"]
+    config: Union[IntegrationConfigSerial, IntegrationConfigHttp]
+
+
+class ExperimentStartRequest(BaseModel):
+    device_id: int
+    model_name: str
+    rois: ROIPreset
+    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    iou_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    inference_size: int = Field(default=640, ge=320, le=1280)
+    fps_target: Optional[float] = None  # None = use camera-native FPS
+    max_consecutive_drops: int = 30
+    triggers: List[TriggerRule] = Field(default_factory=list)
+
+
+class ExperimentStatus(BaseModel):
+    exp_id: Optional[str] = None
+    state: Literal["idle", "running", "stopped", "crashed"]
+    started_at: Optional[str] = None
+    frames_processed: int = 0
+    fps_actual: float = 0.0
+    detections: int = 0
+    events_emitted: int = 0
+    last_active_roi: Optional[int] = None
+
+
+class ExperimentEvent(BaseModel):
+    type: str
+    frame_idx: Optional[int] = None
+    t: Optional[float] = None
+    # additional fields by type, see spec

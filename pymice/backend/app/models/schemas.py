@@ -1,7 +1,7 @@
 """Pydantic schemas for API request/response validation"""
 
 from typing import List, Literal, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # Base Response
@@ -223,11 +223,17 @@ class TriggerMatch(BaseModel):
 
 
 class TriggerAction(BaseModel):
-    integration_id: Optional[str] = None  # required unless kind == "log"
+    integration_id: Optional[str] = None
     kind: Literal["integration", "log"] = "integration"
     payload: Optional[Union[str, dict]] = None
-    label: Optional[str] = None  # for kind="log"
+    label: Optional[str] = None
     timeout_sec: float = 2.0
+
+    @model_validator(mode="after")
+    def _check_integration_id(self) -> "TriggerAction":
+        if self.kind == "integration" and not self.integration_id:
+            raise ValueError("integration_id is required when kind == 'integration'")
+        return self
 
 
 class TriggerRule(BaseModel):
@@ -256,6 +262,14 @@ class Integration(BaseModel):
     kind: Literal["serial", "http"]
     config: Union[IntegrationConfigSerial, IntegrationConfigHttp]
 
+    @model_validator(mode="after")
+    def _check_config_matches_kind(self) -> "Integration":
+        if self.kind == "serial" and not isinstance(self.config, IntegrationConfigSerial):
+            raise ValueError("config must be IntegrationConfigSerial when kind == 'serial'")
+        if self.kind == "http" and not isinstance(self.config, IntegrationConfigHttp):
+            raise ValueError("config must be IntegrationConfigHttp when kind == 'http'")
+        return self
+
 
 class ExperimentStartRequest(BaseModel):
     device_id: int
@@ -281,7 +295,8 @@ class ExperimentStatus(BaseModel):
 
 
 class ExperimentEvent(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     type: str
     frame_idx: Optional[int] = None
     t: Optional[float] = None
-    # additional fields by type, see spec

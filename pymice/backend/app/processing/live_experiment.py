@@ -46,6 +46,39 @@ def _load_yolo_model(model_path: str):
     return YOLO(model_path)
 
 
+def _probe_inference_device(model, model_path: str):
+    """Verify the model can actually run a forward pass.
+
+    On hardware where torch.cuda.is_available() is True but the GPU
+    architecture isn't supported by the installed PyTorch binary
+    (e.g. RTX 5060 Ti sm_120 against a torch built for sm<=90), the
+    first model.predict() raises 'no kernel image is available'.
+    We probe once with a tiny tensor and fall back to CPU if that
+    happens. Returns (model, device_str) where device_str is None
+    (let Ultralytics pick) or 'cpu' (forced).
+    """
+    probe = np.zeros((64, 64, 3), dtype=np.uint8)
+    try:
+        model.predict(probe, verbose=False)
+        return model, None
+    except RuntimeError as e:
+        msg = str(e).lower()
+        if any(s in msg for s in ("kernel image", "cuda capability", "cuda error")):
+            logger.warning(
+                "GPU inference probe failed (%s); falling back to CPU",
+                str(e).splitlines()[0][:120],
+            )
+            # Reload model fresh and pin to CPU. A stale model that already
+            # tried CUDA can carry partial state that re-fires the error.
+            model = _load_yolo_model(model_path)
+            try:
+                model.predict(probe, device="cpu", verbose=False)
+            except Exception as cpu_e:
+                raise RuntimeError(f"CPU fallback probe failed: {cpu_e}") from cpu_e
+            return model, "cpu"
+        raise
+
+
 def _best_detection(results) -> Optional[tuple]:
     """Pick the highest-confidence box from Ultralytics results.
     Returns (centroid_x, centroid_y, bbox_xyxy, confidence) or None.
@@ -385,6 +418,22 @@ class LiveExperiment:
             self._state = "stopped"
             return
 
+        try:
+            model, inference_device = _probe_inference_device(model, model_path)
+        except Exception as e:
+            self._emit({"type": "stopped", "reason": f"inference_probe_failed: {e}"})
+            self._state = "stopped"
+            return
+
+        if inference_device == "cpu":
+            self._emit({
+                "type": "device_fallback",
+                "from": "cuda",
+                "to": "cpu",
+                "message": "GPU incompatible with this PyTorch build; running on CPU. "
+                           "Inference will be slower.",
+            })
+
         consecutive_drops = 0
         max_drops = self.request.max_consecutive_drops
         tick_interval = 1.0
@@ -424,13 +473,15 @@ class LiveExperiment:
             t = self._t_since_start()
 
             try:
-                results = model.predict(
-                    frame,
+                predict_kwargs = dict(
                     conf=self.request.confidence_threshold,
                     iou=self.request.iou_threshold,
                     imgsz=self.request.inference_size,
                     verbose=False,
                 )
+                if inference_device is not None:
+                    predict_kwargs["device"] = inference_device
+                results = model.predict(frame, **predict_kwargs)
             except Exception as e:
                 self._emit({"type": "stopped", "reason": f"detector_error: {e}"})
                 self._state = "stopped"

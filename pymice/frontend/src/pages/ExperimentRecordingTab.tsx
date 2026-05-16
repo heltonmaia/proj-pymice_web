@@ -54,6 +54,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const wsRef = useRef<WebSocket | null>(null)
   const [liveFps, setLiveFps] = useState<number | null>(null)
   const [liveFrames, setLiveFrames] = useState<number | null>(null)
+  const [liveDevice, setLiveDevice] = useState<string | null>(null)
 
   useEffect(() => {
     onTrackingStateChange?.(view === 'live')
@@ -233,6 +234,9 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
         if (evt.type === 'segment_rotated' && typeof evt.new_index === 'number') {
           setLiveSegmentIndex(evt.new_index)
         }
+        if (evt.type === 'device_fallback') {
+          setLiveDevice(String(evt.to ?? 'cpu'))
+        }
         if (evt.type === 'stopped') {
           setView('done')
         }
@@ -265,6 +269,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
     setLiveFps(null)
     setLiveFrames(null)
     setLiveSegmentIndex(null)
+    setLiveDevice(null)
     setDoneFiles([])
     setView('setup')
   }
@@ -571,6 +576,11 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
                   <div className="text-gray-500">Frames: {liveFrames ?? 0}</div>
                   <div className="text-gray-500">Segment: #{liveSegmentIndex ?? 0}</div>
                   <div className="text-gray-500">Active ROI: {activeRoi ?? '—'}</div>
+                  {liveDevice && (
+                    <div className="text-amber-600 dark:text-amber-400 text-xs">
+                      ⚠ Running on {liveDevice.toUpperCase()} (GPU incompatible)
+                    </div>
+                  )}
                 </>
               )}
               {view === 'done' && (

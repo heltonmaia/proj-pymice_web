@@ -135,6 +135,34 @@ async def startup_event():
     os.makedirs("temp/experiments", exist_ok=True)
     _mark_orphan_experiments()
 
+    # Idle-camera watchdog: releases the cap if no /frame request has been
+    # seen for ~30s — catches "user closed the tab" without us ever knowing,
+    # so the camera LED stops staying on.
+    from app.routers.camera import start_watchdog
+    start_watchdog()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Release shared resources cleanly on SIGTERM/SIGINT.
+
+    Order matters: experiment first (its loop reads the camera), then the
+    camera itself, then the watchdog.
+    """
+    print("\n🧹 Shutdown: stopping experiment and releasing camera...")
+    try:
+        from app.routers.experiment import abort_running_experiment
+        abort_running_experiment(reason="backend_shutdown")
+    except Exception as e:
+        print(f"   ⚠ abort_running_experiment raised: {e}")
+    try:
+        from app.routers.camera import release_camera, stop_watchdog
+        release_camera(reason="backend_shutdown")
+        stop_watchdog()
+    except Exception as e:
+        print(f"   ⚠ camera release raised: {e}")
+    print("✅ Shutdown complete.")
+
 
 # CORS middleware
 app.add_middleware(

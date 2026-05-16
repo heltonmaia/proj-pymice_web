@@ -15,6 +15,7 @@ Artifacts written to <output_base_dir>/<exp_id>/:
 """
 
 import json
+import logging
 import os
 import threading
 import time
@@ -31,6 +32,8 @@ from app.processing.segment_writer import SegmentedRecorder, WriterThread
 from app.processing.tracking import get_roi_containing_point, draw_rois
 from app.processing.trigger_evaluator import TriggerEvaluator
 from app.services.event_bus import EventBus
+
+logger = logging.getLogger("pymice.live_experiment")
 
 
 def _now_iso() -> str:
@@ -176,8 +179,20 @@ class LiveExperiment:
         fps_native = cap.get(cv2.CAP_PROP_FPS) or 30.0
         fps_target = self.request.fps_target or fps_native
 
+        if width <= 0 or height <= 0:
+            raise RuntimeError(
+                f"Camera reported invalid dimensions ({width}x{height}); "
+                "is the stream really open?"
+            )
+
         segment_max_bytes = max(1, int(self.request.segment_max_mb)) * 1024 * 1024
         segment_max_seconds = max(1.0, float(self.request.segment_max_seconds))
+
+        logger.info(
+            "start: exp_id=%s dir=%s size=%dx%d fps=%.1f segment_max=%dMB/%.0fs",
+            self.exp_id, self._artifacts.exp_dir, width, height, fps_target,
+            self.request.segment_max_mb, segment_max_seconds,
+        )
 
         self._recorder = SegmentedRecorder(
             base_dir=self._artifacts.exp_dir,

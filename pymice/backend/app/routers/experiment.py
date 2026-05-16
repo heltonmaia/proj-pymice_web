@@ -5,9 +5,14 @@ Owns:
   - REST endpoints for lifecycle, integrations, triggers, ROI updates
   - WebSocket /events channel
   - Action dispatcher that bridges trigger fires -> integration adapters
+
+External callers (the camera router, the shutdown event in main) interact
+with the experiment lifecycle via the small helpers `is_experiment_running()`
+and `abort_running_experiment()`. This avoids circular imports.
 """
 
 import asyncio
+import logging
 import os
 import re
 from typing import Dict, List, Optional
@@ -37,11 +42,31 @@ from app.services.integrations import (
 
 
 router = APIRouter()
+logger = logging.getLogger("pymice.experiment")
 
 _bus = EventBus()
 _experiment_state: Dict[str, Optional[LiveExperiment]] = {"current": None}
 _adapters: Dict[str, object] = {}
 _main_loop_ref: Dict[str, Optional[asyncio.AbstractEventLoop]] = {"loop": None}
+
+
+def is_experiment_running() -> bool:
+    exp = _experiment_state.get("current")
+    return exp is not None and exp._state == "running"
+
+
+def abort_running_experiment(reason: str = "external") -> bool:
+    """Stop a running experiment if any. Returns True if it stopped one."""
+    exp = _experiment_state.get("current")
+    if exp is None or exp._state != "running":
+        return False
+    try:
+        exp.stop(reason)
+        logger.info("aborted running experiment (reason=%s)", reason)
+        return True
+    except Exception as e:
+        logger.exception("abort_running_experiment failed: %s", e)
+        return False
 
 
 def _stream_provider():
@@ -128,6 +153,14 @@ async def start_experiment(request: ExperimentStartRequest):
     except OSError as e:
         raise HTTPException(status_code=400, detail=f"Cannot create output dir: {e}")
 
+    # Defensive: if a previous experiment is still in 'stopped' but the singleton
+    # ref is alive, drop it so we don't leak references to closed file handles.
+    prev = _experiment_state.get("current")
+    if prev is not None and prev._state != "running":
+        logger.info("clearing previous experiment singleton (exp_id=%s, state=%s)",
+                    prev.exp_id, prev._state)
+        _experiment_state["current"] = None
+
     exp = LiveExperiment(
         request=request,
         event_bus=_bus,
@@ -139,8 +172,16 @@ async def start_experiment(request: ExperimentStartRequest):
     try:
         exp.start()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("experiment start failed (exp_id=%s): %s", exp.exp_id, e)
+        # Cleanup partial state so the next attempt isn't poisoned.
+        try:
+            if exp._writer_thread is not None:
+                exp._writer_thread.stop(0, 0.0, timeout=2.0)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"experiment start failed: {e}")
     _experiment_state["current"] = exp
+    logger.info("experiment started (exp_id=%s, output=%s)", exp.exp_id, safe_base)
     return ApiResponse(
         success=True,
         data={"exp_id": exp.exp_id, "ws_url": "/api/experiment/events"},

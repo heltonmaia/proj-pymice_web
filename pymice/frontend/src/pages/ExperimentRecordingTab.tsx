@@ -43,6 +43,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const pollRef = useRef<number | null>(null)
   const pollAliveRef = useRef<boolean>(false)
   const pollInflightRef = useRef<boolean>(false)
+  const [streamBusy, setStreamBusy] = useState<boolean>(false)
+  const [streamError, setStreamError] = useState<string | null>(null)
 
   const [expId, setExpId] = useState<string | null>(null)
   const [activeRoi, setActiveRoi] = useState<number | null>(null)
@@ -104,29 +106,65 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   }
 
   const startStream = async () => {
-    const r = await cameraApi.startStream(selectedDevice, {
-      width: resolution.width,
-      height: resolution.height,
-      brightness,
-    })
-    if (r.data.data?.width && r.data.data?.height) {
-      setResolution({ width: r.data.data.width, height: r.data.data.height })
+    if (streamBusy) return
+    setStreamBusy(true)
+    setStreamError(null)
+    try {
+      const r = await cameraApi.startStream(selectedDevice, {
+        width: resolution.width,
+        height: resolution.height,
+        brightness,
+      })
+      if (r.data.data?.width && r.data.data?.height) {
+        setResolution({ width: r.data.data.width, height: r.data.data.height })
+      }
+      setIsStreaming(true)
+      pollAliveRef.current = true
+      pollFrame()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      setStreamError(typeof detail === 'string' ? detail : String(e))
+    } finally {
+      setStreamBusy(false)
     }
-    setIsStreaming(true)
-    pollAliveRef.current = true
-    pollFrame()
   }
 
   const stopStream = async () => {
+    if (streamBusy) return
+    // Optimistic UI update — kill the poll immediately so frames stop being fetched,
+    // even if the backend call itself is slow.
     pollAliveRef.current = false
     if (pollRef.current) {
       clearTimeout(pollRef.current)
       pollRef.current = null
     }
-    await cameraApi.stopStream()
     setIsStreaming(false)
     setBgImage(null)
+    setStreamBusy(true)
+    setStreamError(null)
+    try {
+      await cameraApi.stopStream()
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      setStreamError(typeof detail === 'string' ? detail : String(e))
+    } finally {
+      setStreamBusy(false)
+    }
   }
+
+  // Tab/window close → fire a stateless beacon to release the camera. This is
+  // the only reliable cleanup path when the user just closes the tab.
+  useEffect(() => {
+    const onUnload = () => {
+      try {
+        navigator.sendBeacon('/api/camera/stream/stop')
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener('beforeunload', onUnload)
+    return () => window.removeEventListener('beforeunload', onUnload)
+  }, [])
 
   // Push brightness changes live while streaming
   useEffect(() => {
@@ -371,17 +409,26 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
 
             <div className="flex flex-wrap gap-3 items-start">
               {view !== 'live' && (
-                <button
-                  onClick={isStreaming ? stopStream : startStream}
-                  disabled={view === 'done'}
-                  className={`px-4 py-2 rounded text-white flex items-center gap-2 disabled:opacity-50 ${
-                    isStreaming ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'
-                  }`}
-                >
-                  {isStreaming
-                    ? <><Square className="w-4 h-4" /> Stop Preview</>
-                    : <><Circle className="w-4 h-4" /> Start Preview</>}
-                </button>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={isStreaming ? stopStream : startStream}
+                    disabled={view === 'done' || streamBusy}
+                    className={`px-4 py-2 rounded text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isStreaming ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'
+                    }`}
+                  >
+                    {streamBusy
+                      ? <span>…</span>
+                      : isStreaming
+                        ? <><Square className="w-4 h-4" /> Stop Preview</>
+                        : <><Circle className="w-4 h-4" /> Start Preview</>}
+                  </button>
+                  {streamError && (
+                    <span className="text-xs text-red-600 dark:text-red-400 max-w-[200px]">
+                      {streamError}
+                    </span>
+                  )}
+                </div>
               )}
               {view === 'setup' && (() => {
                 const blockers: string[] = []

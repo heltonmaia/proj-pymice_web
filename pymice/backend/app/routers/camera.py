@@ -7,7 +7,21 @@ import io
 import threading
 from typing import Optional
 
-from app.models.schemas import ApiResponse, StreamRequest, RecordingRequest
+from app.models.schemas import ApiResponse, StreamRequest, RecordingRequest, CameraPropertiesUpdate
+
+
+def _apply_camera_settings(cap, width=None, height=None, brightness=None):
+    """Apply optional resolution + brightness to an open VideoCapture.
+
+    Brightness in 0–100 maps to the camera's native CAP_PROP_BRIGHTNESS scale —
+    OpenCV normalises this to 0.0–1.0 on most V4L2 backends, so we send /100.
+    Cameras that don't support a property silently ignore the set() call.
+    """
+    if width and height:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(width))
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(height))
+    if brightness is not None:
+        cap.set(cv2.CAP_PROP_BRIGHTNESS, max(0.0, min(1.0, brightness / 100.0)))
 
 router = APIRouter()
 
@@ -44,15 +58,34 @@ async def start_stream(request: StreamRequest):
         if not cap.isOpened():
             raise HTTPException(status_code=400, detail="Failed to open camera")
 
+        _apply_camera_settings(cap, request.width, request.height, request.brightness)
+
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
         camera_state["stream"] = cap
         camera_state["device_id"] = request.device_id
 
         return ApiResponse(
             success=True,
-            data={"message": f"Stream started on device {request.device_id}"}
+            data={
+                "message": f"Stream started on device {request.device_id}",
+                "width": actual_w,
+                "height": actual_h,
+            },
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/properties")
+async def update_camera_properties(props: CameraPropertiesUpdate):
+    """Update mutable camera properties (currently: brightness) on the live stream."""
+    cap = camera_state.get("stream")
+    if cap is None:
+        raise HTTPException(status_code=400, detail="No active stream")
+    _apply_camera_settings(cap, brightness=props.brightness)
+    return ApiResponse(success=True, data={"applied": props.model_dump(exclude_none=True)})
 
 
 @router.post("/stream/stop")

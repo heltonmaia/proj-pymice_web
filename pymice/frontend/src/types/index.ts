@@ -238,6 +238,7 @@ export interface ExperimentStartRequest {
   fps_target?: number | null
   max_consecutive_drops?: number
   triggers?: TriggerRule[]
+  output_base_dir?: string
 }
 
 export interface ExperimentStatus {

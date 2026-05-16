@@ -24,11 +24,20 @@ const api = axios.create({
 export const cameraApi = {
   listDevices: () => api.get<ApiResponse<number[]>>('/camera/devices'),
 
-  startStream: (deviceId: number) =>
-    api.post<ApiResponse<string>>('/camera/stream/start', { device_id: deviceId }),
+  startStream: (
+    deviceId: number,
+    opts?: { width?: number; height?: number; brightness?: number },
+  ) =>
+    api.post<ApiResponse<{ message: string; width: number; height: number }>>(
+      '/camera/stream/start',
+      { device_id: deviceId, ...opts },
+    ),
 
   stopStream: () =>
     api.post<ApiResponse<void>>('/camera/stream/stop'),
+
+  setProperties: (props: { brightness?: number }) =>
+    api.post<ApiResponse<{ applied: Record<string, number> }>>('/camera/properties', props),
 
   getFrame: () =>
     api.get<Blob>('/camera/frame', { responseType: 'blob' }),

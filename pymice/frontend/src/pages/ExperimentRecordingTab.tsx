@@ -17,13 +17,15 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const [view, setView] = useState<View>('setup')
   const [devices, setDevices] = useState<number[]>([])
   const [selectedDevice, setSelectedDevice] = useState<number>(0)
-  const [resolution] = useState({ width: 640, height: 480 })
+  const [resolution, setResolution] = useState({ width: 640, height: 480 })
+  const [brightness, setBrightness] = useState<number>(50)
   const [isStreaming, setIsStreaming] = useState(false)
   const [rois, setRois] = useState<ROI[]>([])
   const [tool, setTool] = useState<'Rectangle' | 'Circle' | 'Polygon'>('Rectangle')
 
   const [models, setModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState<string>('')
+  const [outputDir, setOutputDir] = useState<string>('temp/experiments')
 
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -73,7 +75,15 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   }
 
   const startStream = async () => {
-    await cameraApi.startStream(selectedDevice)
+    const r = await cameraApi.startStream(selectedDevice, {
+      width: resolution.width,
+      height: resolution.height,
+      brightness,
+    })
+    // Adopt the resolution the camera actually delivered (some hardware rounds).
+    if (r.data.data?.width && r.data.data?.height) {
+      setResolution({ width: r.data.data.width, height: r.data.data.height })
+    }
     setIsStreaming(true)
     pollRef.current = window.setInterval(pollFrame, 33)
   }
@@ -87,6 +97,15 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
     setIsStreaming(false)
     setBgImage(null)
   }
+
+  // Push brightness changes live while streaming
+  useEffect(() => {
+    if (!isStreaming) return
+    const id = window.setTimeout(() => {
+      cameraApi.setProperties({ brightness }).catch(() => { /* camera may not support */ })
+    }, 150)
+    return () => window.clearTimeout(id)
+  }, [brightness, isStreaming])
 
   const startExperiment = async () => {
     const preset: ROIPreset = {
@@ -105,6 +124,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
       iou_threshold: 0.5,
       inference_size: 640,
       triggers: [],
+      output_base_dir: outputDir.trim() || 'temp/experiments',
     })
     if (!r.data.success || !r.data.data) {
       alert(`Failed to start experiment: ${r.data.error}`)
@@ -158,7 +178,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           Experiment Recording
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium mb-1">Camera Device</label>
             <select
@@ -170,6 +190,22 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               {devices.map((d) => (
                 <option key={d} value={d}>Camera {d}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Resolution</label>
+            <select
+              value={`${resolution.width}x${resolution.height}`}
+              onChange={(e) => {
+                const [w, h] = e.target.value.split('x').map(Number)
+                setResolution({ width: w, height: h })
+              }}
+              disabled={isStreaming || view === 'live'}
+              className="w-full bg-white dark:bg-gray-700 border rounded px-3 py-2"
+            >
+              <option value="640x480">640 × 480</option>
+              <option value="1280x720">1280 × 720 (HD)</option>
+              <option value="1920x1080">1920 × 1080 (Full HD)</option>
             </select>
           </div>
           <div>
@@ -191,9 +227,40 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
                 isStreaming ? 'bg-red-600' : 'bg-primary-600'
               } disabled:opacity-50`}
             >
-              {isStreaming ? (<><Square className="inline w-4 h-4 mr-2" /> Stop Stream</>) :
-                            (<><Circle className="inline w-4 h-4 mr-2" /> Start Stream</>)}
+              {isStreaming ? (<><Square className="inline w-4 h-4 mr-2" /> Stop Preview</>) :
+                            (<><Circle className="inline w-4 h-4 mr-2" /> Start Preview</>)}
             </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Brightness <span className="text-gray-500">({brightness})</span>
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={brightness}
+              onChange={(e) => setBrightness(Number(e.target.value))}
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Output Folder</label>
+            <input
+              type="text"
+              value={outputDir}
+              onChange={(e) => setOutputDir(e.target.value)}
+              disabled={view === 'live'}
+              placeholder="temp/experiments"
+              className="w-full bg-white dark:bg-gray-700 border rounded px-3 py-2 font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Backend creates <code>&lt;folder&gt;/&lt;exp_id&gt;/</code> with raw.mp4, tracking.jsonl, events.jsonl, metadata.json
+            </p>
           </div>
         </div>
 
@@ -234,7 +301,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               disabled={!isStreaming || rois.length === 0 || !selectedModel}
               className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-4 py-2 rounded flex items-center gap-2"
             >
-              <Play className="w-4 h-4" /> Start Experiment
+              <Play className="w-4 h-4" /> Start Recording
             </button>
           )}
           {view === 'live' && (
@@ -242,12 +309,12 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               onClick={stopExperiment}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded flex items-center gap-2"
             >
-              <StopCircle className="w-4 h-4" /> Stop Experiment
+              <StopCircle className="w-4 h-4" /> Stop Recording
             </button>
           )}
           {view === 'done' && (
             <button onClick={reset} className="bg-primary-600 text-white px-4 py-2 rounded">
-              New Experiment
+              New Recording
             </button>
           )}
         </div>

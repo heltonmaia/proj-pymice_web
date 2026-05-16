@@ -118,12 +118,22 @@ async def start_experiment(request: ExperimentStartRequest):
         available = [f for f in os.listdir("temp/models") if f.endswith(".pt")] if os.path.exists("temp/models") else []
         raise HTTPException(status_code=400, detail={"error": "model_not_found", "available": available})
 
+    # Validate destination — reject path traversal and force absolute or relative-to-cwd
+    safe_base = (request.output_base_dir or "temp/experiments").strip()
+    if ".." in safe_base.split(os.sep):
+        raise HTTPException(status_code=400, detail="output_base_dir cannot contain '..'")
+    try:
+        os.makedirs(safe_base, exist_ok=True)
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"Cannot create output dir: {e}")
+
     exp = LiveExperiment(
         request=request,
         event_bus=_bus,
         stream_provider=_stream_provider,
         annotated_frame_setter=_annotated_frame_setter,
         action_dispatcher=_dispatch_action,
+        base_dir=safe_base,
     )
     try:
         exp.start()

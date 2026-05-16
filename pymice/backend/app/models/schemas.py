@@ -139,6 +139,13 @@ class CameraSettings(BaseModel):
 
 class StreamRequest(BaseModel):
     device_id: int
+    width: Optional[int] = None
+    height: Optional[int] = None
+    brightness: Optional[float] = None  # 0–100 in UI; mapped to camera-native range
+
+
+class CameraPropertiesUpdate(BaseModel):
+    brightness: Optional[float] = None  # 0–100
 
 
 class RecordingRequest(BaseModel):
@@ -281,6 +288,7 @@ class ExperimentStartRequest(BaseModel):
     fps_target: Optional[float] = None  # None = use camera-native FPS
     max_consecutive_drops: int = 30
     triggers: List[TriggerRule] = Field(default_factory=list)
+    output_base_dir: str = "temp/experiments"
 
 
 class ExperimentStatus(BaseModel):

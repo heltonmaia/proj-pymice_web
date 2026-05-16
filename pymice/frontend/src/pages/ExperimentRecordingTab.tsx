@@ -45,6 +45,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const pollInflightRef = useRef<boolean>(false)
   const [streamBusy, setStreamBusy] = useState<boolean>(false)
   const [streamError, setStreamError] = useState<string | null>(null)
+  const [recordingBusy, setRecordingBusy] = useState<boolean>(false)
+  const [recordingError, setRecordingError] = useState<string | null>(null)
 
   const [expId, setExpId] = useState<string | null>(null)
   const [activeRoi, setActiveRoi] = useState<number | null>(null)
@@ -176,6 +178,9 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   }, [brightness, isStreaming])
 
   const startExperiment = async () => {
+    if (recordingBusy) return
+    setRecordingError(null)
+    setRecordingBusy(true)
     const preset: ROIPreset = {
       preset_name: 'live',
       description: 'Created in Experiment Recording',
@@ -184,24 +189,34 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
       frame_height: resolution.height,
       rois,
     }
-    const r = await experimentApi.start({
-      device_id: selectedDevice,
-      model_name: selectedModel,
-      rois: preset,
-      confidence_threshold: 0.5,
-      iou_threshold: 0.5,
-      inference_size: 640,
-      triggers: [],
-      output_base_dir: outputDir.trim() || 'temp/experiments',
-      segment_max_mb: segmentMaxMb,
-    })
+    let r
+    try {
+      r = await experimentApi.start({
+        device_id: selectedDevice,
+        model_name: selectedModel,
+        rois: preset,
+        confidence_threshold: 0.5,
+        iou_threshold: 0.5,
+        inference_size: 640,
+        triggers: [],
+        output_base_dir: outputDir.trim() || 'temp/experiments',
+        segment_max_mb: segmentMaxMb,
+      })
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+      setRecordingError(typeof detail === 'string' ? detail : JSON.stringify(detail ?? e))
+      setRecordingBusy(false)
+      return
+    }
     if (!r.data.success || !r.data.data) {
-      alert(`Failed to start experiment: ${r.data.error}`)
+      setRecordingError(r.data.error ?? 'Backend returned success=false')
+      setRecordingBusy(false)
       return
     }
     setExpId(r.data.data.exp_id)
     setView('live')
     setEvents([])
+    setRecordingBusy(false)
 
     wsRef.current = experimentApi.subscribeEvents(
       (evt) => {
@@ -262,7 +277,10 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           Experiment Recording
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        {/* Camera section: device + resolution + preview toggle live together.
+            Preview is a small toggle on the right (camera management), distinct
+            from Start Recording (the primary action below the canvas). */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium mb-1">Camera Device</label>
             <select
@@ -302,6 +320,30 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
             >
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Preview</label>
+            <button
+              onClick={isStreaming ? stopStream : startStream}
+              disabled={view === 'live' || streamBusy}
+              className={`w-full px-3 py-2 rounded text-white text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isStreaming
+                  ? 'bg-gray-600 hover:bg-gray-700'
+                  : 'bg-primary-600 hover:bg-primary-700'
+              }`}
+              title={isStreaming ? 'Turn the camera off' : 'Turn the camera on (no recording)'}
+            >
+              {streamBusy
+                ? '…'
+                : isStreaming
+                  ? <><Square className="w-4 h-4" /> Stop Preview</>
+                  : <><Circle className="w-4 h-4" /> Start Preview</>}
+            </button>
+            {streamError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1 truncate" title={streamError}>
+                {streamError}
+              </p>
+            )}
           </div>
         </div>
 
@@ -407,67 +449,67 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               tool={tool}
             />
 
-            <div className="flex flex-wrap gap-3 items-start">
-              {view !== 'live' && (
-                <div className="flex flex-col gap-1">
-                  <button
-                    onClick={isStreaming ? stopStream : startStream}
-                    disabled={view === 'done' || streamBusy}
-                    className={`px-4 py-2 rounded text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isStreaming ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'
-                    }`}
-                  >
-                    {streamBusy
-                      ? <span>…</span>
-                      : isStreaming
-                        ? <><Square className="w-4 h-4" /> Stop Preview</>
-                        : <><Circle className="w-4 h-4" /> Start Preview</>}
-                  </button>
-                  {streamError && (
-                    <span className="text-xs text-red-600 dark:text-red-400 max-w-[200px]">
-                      {streamError}
-                    </span>
-                  )}
-                </div>
-              )}
+            {/* Recording action — the only primary action below the canvas.
+                Preview lives in the top row (camera management). This row is
+                a single big button whose label/color reflects the current
+                view: Start Recording (setup) → Stop Recording (live) → New
+                Recording (done). Hints and errors hang below the button. */}
+            <div className="flex flex-col gap-2">
               {view === 'setup' && (() => {
                 const blockers: string[] = []
                 if (!isStreaming) blockers.push('Start Preview first')
                 if (!selectedModel) blockers.push('Select a YOLO model')
-                const isDisabled = blockers.length > 0
+                const isDisabled = blockers.length > 0 || recordingBusy
                 return (
-                  <div className="flex flex-col gap-1">
+                  <>
                     <button
                       onClick={startExperiment}
                       disabled={isDisabled}
-                      title={isDisabled ? blockers.join(' · ') : 'Begin recording video + tracking data'}
-                      className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded flex items-center gap-2"
+                      title={blockers.length ? blockers.join(' · ') : 'Begin recording video + tracking data'}
+                      className="bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded font-medium flex items-center justify-center gap-2 self-start"
                     >
-                      <Play className="w-4 h-4" /> Start Recording
+                      <Play className="w-5 h-5" />
+                      {recordingBusy ? 'Starting…' : 'Start Recording'}
                     </button>
-                    {isDisabled && (
+                    {blockers.length > 0 && (
                       <span className="text-xs text-amber-600 dark:text-amber-400">
                         {blockers.join(' · ')}
                       </span>
                     )}
-                    {!isDisabled && rois.length === 0 && (
+                    {!blockers.length && rois.length === 0 && (
                       <span className="text-xs text-gray-500">
-                        No ROIs — video + tracking will still record (no entry/exit events)
+                        No ROIs — video + tracking will record (no roi_entry/exit events).
                       </span>
                     )}
-                  </div>
+                    {recordingError && (
+                      <span className="text-xs text-red-600 dark:text-red-400">
+                        Recording failed: {recordingError}
+                      </span>
+                    )}
+                  </>
                 )
               })()}
               {view === 'live' && (
-                <button
-                  onClick={stopExperiment}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded flex items-center gap-2"
-                >
-                  <StopCircle className="w-4 h-4" /> Stop Recording
-                </button>
+                <>
+                  <button
+                    onClick={stopExperiment}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded font-medium flex items-center justify-center gap-2 self-start"
+                  >
+                    <StopCircle className="w-5 h-5" />
+                    Stop Recording
+                  </button>
+                  <span className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    Recording in progress — camera settings are locked.
+                  </span>
+                </>
               )}
               {view === 'done' && (
-                <button onClick={reset} className="bg-primary-600 text-white px-4 py-2 rounded">
+                <button
+                  onClick={reset}
+                  className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded font-medium flex items-center justify-center gap-2 self-start"
+                >
+                  <Play className="w-5 h-5" />
                   New Recording
                 </button>
               )}

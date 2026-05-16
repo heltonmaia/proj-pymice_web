@@ -31,6 +31,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
 
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null)
   const pollRef = useRef<number | null>(null)
+  const pollAliveRef = useRef<boolean>(false)
+  const pollInflightRef = useRef<boolean>(false)
 
   const [expId, setExpId] = useState<string | null>(null)
   const [activeRoi, setActiveRoi] = useState<number | null>(null)
@@ -61,7 +63,16 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
     })
   }, [])
 
+  // Self-pacing poll: next fetch is scheduled only after the previous one
+  // resolves, so slow responses don't pile up requests. Pace target is ~33ms
+  // (≈30 FPS) but the server's actual rate dominates.
   const pollFrame = async () => {
+    if (!pollAliveRef.current) return
+    if (pollInflightRef.current) {
+      pollRef.current = window.setTimeout(pollFrame, 16)
+      return
+    }
+    pollInflightRef.current = true
     try {
       const r = await cameraApi.getFrame()
       const url = URL.createObjectURL(r.data)
@@ -73,6 +84,11 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
       img.src = url
     } catch {
       /* ignore transient errors */
+    } finally {
+      pollInflightRef.current = false
+      if (pollAliveRef.current) {
+        pollRef.current = window.setTimeout(pollFrame, 16)
+      }
     }
   }
 
@@ -82,17 +98,18 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
       height: resolution.height,
       brightness,
     })
-    // Adopt the resolution the camera actually delivered (some hardware rounds).
     if (r.data.data?.width && r.data.data?.height) {
       setResolution({ width: r.data.data.width, height: r.data.data.height })
     }
     setIsStreaming(true)
-    pollRef.current = window.setInterval(pollFrame, 33)
+    pollAliveRef.current = true
+    pollFrame()
   }
 
   const stopStream = async () => {
+    pollAliveRef.current = false
     if (pollRef.current) {
-      clearInterval(pollRef.current)
+      clearTimeout(pollRef.current)
       pollRef.current = null
     }
     await cameraApi.stopStream()
@@ -247,7 +264,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               step={1}
               value={brightness}
               onChange={(e) => setBrightness(Number(e.target.value))}
-              className="w-full"
+              disabled={!isStreaming || view === 'live'}
+              className="w-full disabled:opacity-50"
             />
           </div>
           <div>
@@ -279,28 +297,33 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column: tool bar, canvas, recording controls, artifacts */}
           <div className="lg:col-span-2 space-y-3">
-            {view === 'setup' && isStreaming && (
-              <div className="flex gap-2">
-                {(['Rectangle', 'Circle', 'Polygon'] as const).map((t) => (
+            {/* Tool bar — always visible, disabled when no preview or while recording */}
+            <div className="flex gap-2">
+              {(['Rectangle', 'Circle', 'Polygon'] as const).map((t) => {
+                const toolsEnabled = view === 'setup' && isStreaming
+                return (
                   <button
                     key={t}
                     onClick={() => setTool(t)}
+                    disabled={!toolsEnabled}
                     className={`px-3 py-1 rounded text-sm border ${
-                      tool === t ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-700'
-                    }`}
+                      tool === t && toolsEnabled
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-white dark:bg-gray-700'
+                    } disabled:opacity-40`}
                   >
                     {t}
                   </button>
-                ))}
-                <button
-                  onClick={() => setRois([])}
-                  disabled={rois.length === 0}
-                  className="px-3 py-1 rounded text-sm border bg-white dark:bg-gray-700 disabled:opacity-40"
-                >
-                  Clear ROIs
-                </button>
-              </div>
-            )}
+                )
+              })}
+              <button
+                onClick={() => setRois([])}
+                disabled={view !== 'setup' || !isStreaming || rois.length === 0}
+                className="px-3 py-1 rounded text-sm border bg-white dark:bg-gray-700 disabled:opacity-40"
+              >
+                Clear ROIs
+              </button>
+            </div>
 
             <ROICanvas
               width={resolution.width}

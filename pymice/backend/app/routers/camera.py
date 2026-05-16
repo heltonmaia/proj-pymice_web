@@ -10,6 +10,9 @@ from typing import Optional
 from app.models.schemas import ApiResponse, StreamRequest, RecordingRequest, CameraPropertiesUpdate
 
 
+JPEG_QUALITY = 75  # quality/size trade-off for the preview pipeline
+
+
 def _apply_camera_settings(cap, width=None, height=None, brightness=None):
     """Apply optional resolution + brightness to an open VideoCapture.
 
@@ -22,6 +25,8 @@ def _apply_camera_settings(cap, width=None, height=None, brightness=None):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(height))
     if brightness is not None:
         cap.set(cv2.CAP_PROP_BRIGHTNESS, max(0.0, min(1.0, brightness / 100.0)))
+    # Minimum buffer to avoid stale frames piling up in the V4L2 queue (low latency).
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 router = APIRouter()
 
@@ -114,7 +119,7 @@ async def get_frame():
             annotated = camera_state["annotated_frame"].copy()
 
     if annotated is not None:
-        _, buffer = cv2.imencode(".jpg", annotated)
+        _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
         return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
 
     if not camera_state["stream"]:
@@ -127,7 +132,7 @@ async def get_frame():
     if camera_state["recording"] and camera_state["recording"]["writer"]:
         camera_state["recording"]["writer"].write(frame)
 
-    _, buffer = cv2.imencode(".jpg", frame)
+    _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
     return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
 
 

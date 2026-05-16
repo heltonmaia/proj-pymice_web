@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 import shutil
 
-from app.routers import camera, video, tracking, roi, analysis, system
+from app.routers import camera, video, tracking, roi, analysis, system, experiment
 
 app = FastAPI(
     title="PyMice Web API",
@@ -19,7 +19,8 @@ import time
 
 def cleanup_temp_directories(max_age_seconds: int = 3600):
     """Clean temporary directories, but only for files older than max_age_seconds"""
-    # Directories to clean (but models directory will preserve .pt files)
+    # NOTE: temp/experiments/ and temp/integrations.json are deliberately NOT cleaned —
+    # they hold user data (recordings, hardware bindings) that must survive restarts.
     temp_dirs = [
         "temp/videos",
         "temp/tracking",
@@ -96,6 +97,29 @@ def cleanup_temp_directories(max_age_seconds: int = 3600):
     print("="*70 + "\n")
 
 
+def _mark_orphan_experiments():
+    """If a previous run died, any experiment still marked 'running' in
+    metadata.json is now an orphan — flag it as crashed."""
+    import json
+    base = "temp/experiments"
+    if not os.path.isdir(base):
+        return
+    for entry in os.listdir(base):
+        meta_path = os.path.join(base, entry, "metadata.json")
+        if not os.path.exists(meta_path):
+            continue
+        try:
+            with open(meta_path) as f:
+                meta = json.load(f)
+            if meta.get("state") == "running":
+                meta["state"] = "crashed"
+                with open(meta_path, "w") as f:
+                    json.dump(meta, f, indent=2)
+                print(f"⚠️  Marked orphan experiment as crashed: {entry}")
+        except Exception as e:
+            print(f"   Could not check {entry}: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     """Run cleanup and setup on application startup"""
@@ -108,6 +132,8 @@ async def startup_event():
     os.makedirs("temp/tracking", exist_ok=True)
     os.makedirs("temp/analysis", exist_ok=True)
     os.makedirs("temp/roi_templates", exist_ok=True)
+    os.makedirs("temp/experiments", exist_ok=True)
+    _mark_orphan_experiments()
 
 
 # CORS middleware
@@ -126,6 +152,7 @@ app.include_router(tracking.router, prefix="/api/tracking", tags=["Tracking"])
 app.include_router(roi.router, prefix="/api/roi", tags=["ROI"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
+app.include_router(experiment.router, prefix="/api/experiment", tags=["Experiment"])
 
 
 @app.get("/")

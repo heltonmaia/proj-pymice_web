@@ -29,6 +29,9 @@ Os timestamps exportados vêm do *container* do vídeo (ffmpeg/ffprobe), não da
 ### 7. *Stack* web, não *desktop*
 O pesquisador acessa o sistema pelo navegador — sem instalação de pacote Python, ambiente Conda ou configuração de GPU do lado do usuário final. O backend FastAPI pode rodar em uma máquina central com GPU e atender múltiplos usuários simultaneamente.
 
+### 8. Tracking ao vivo, gravação e closed-loop em uma única aba
+A aba **Experiment Recording** (`pages/ExperimentRecordingTab.tsx`) consome a câmera USB diretamente, desenha ROIs sobre o frame ao vivo (componente compartilhado `ROICanvas`), roda YOLO frame-a-frame e grava simultaneamente o **vídeo bruto** e um **`tracking.jsonl`** sincronizado por `frame_idx`. Eventos de ROI (`roi_entry`, `roi_exit`) e disparos são publicados em um **canal WebSocket** (`/api/experiment/events`); regras de **trigger** declarativas (cooldown, min_dwell) podem disparar **ações em hardware** — Arduino/ESP32 via USB serial, ou ESP32 via HTTP em LAN. Tudo em um único processo FastAPI, com a porta serial mantida aberta entre disparos para evitar reset-on-open do Arduino.
+
 ## Quando preferir DeepLabCut (ou similar)
 
 O escopo é deliberadamente estreito. O PyMice Web **não substitui** *pose estimation* quando:

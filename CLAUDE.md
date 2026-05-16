@@ -66,6 +66,7 @@ Routers are mounted in `app/main.py`:
 - `/api/roi` — named ROI presets.
 - `/api/analysis` — heatmap, movement, complete analysis, Open Field, video export, large-JSON upload/load.
 - `/api/system` — GPU check, YOLO benchmark.
+- `/api/experiment` — live tracking (start/stop/status), Arduino/ESP32 integrations CRUD, trigger rules, WebSocket `/events`, artifact download.
 
 CORS is hard-coded to `http://localhost:3000` and `http://localhost:5765` — update `app/main.py` if you change the frontend port.
 
@@ -82,3 +83,4 @@ CORS is hard-coded to `http://localhost:3000` and `http://localhost:5765` — up
 - **Tracking pipeline:** YOLO detection first (Ultralytics), with background-subtraction + template matching as a fallback when YOLO misses; both methods are recorded in the per-frame `detection_method` field. ROIs support Rectangle, Circle, Polygon and can be saved/loaded as templates under `temp/roi_templates`.
 - **SAM3 (optional):** `app/routers/tracking.py` adds `temp/models/` to `sys.path` and tries `from sam3.model_builder import build_sam3_video_model`. If the package isn't dropped into `temp/models/sam3/`, `SAM3_AVAILABLE` is False and SAM3-specific endpoints degrade — this is expected, not a bug.
 - **Results export:** JSON with ffmpeg-derived timestamps, centroids, active ROI per frame, detection method, and aggregate statistics. The frontend streams large JSONs via `/api/analysis/upload-large-json` (10-minute timeout) — don't try to load multi-hundred-MB results through the synchronous endpoint.
+- **Experiment Recording (live):** `app/processing/live_experiment.py` owns a daemon-thread loop that consumes `camera_state["stream"]`, runs YOLO per frame, writes raw video + tracking JSONL + events JSONL into `temp/experiments/<exp_id>/`, and emits events to `EventBus`. The router (`app/routers/experiment.py`) exposes lifecycle endpoints and the WebSocket. Hardware bindings (Arduino serial, ESP32 HTTP) live in `app/services/integrations.py` and persist in `temp/integrations.json`. **Singleton:** one experiment per process — `POST /start` is 409 if another is running. **Annotated display:** the loop writes the annotated frame into `camera_state["annotated_frame"]`; `/api/camera/frame` prefers it when present, so the existing frontend polling shows overlays without a new endpoint.

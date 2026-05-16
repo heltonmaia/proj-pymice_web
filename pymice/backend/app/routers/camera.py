@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 import cv2
 import io
+import threading
 from typing import Optional
 
 from app.models.schemas import ApiResponse, StreamRequest, RecordingRequest
@@ -15,6 +16,8 @@ camera_state = {
     "stream": None,
     "recording": None,
     "device_id": None,
+    "annotated_frame": None,
+    "annotated_lock": threading.Lock(),
 }
 
 
@@ -58,13 +61,29 @@ async def stop_stream():
     if camera_state["stream"]:
         camera_state["stream"].release()
         camera_state["stream"] = None
+    with camera_state["annotated_lock"]:
+        camera_state["annotated_frame"] = None
 
     return ApiResponse(success=True, data={"message": "Stream stopped"})
 
 
 @router.get("/frame")
 async def get_frame():
-    """Get current frame from camera stream"""
+    """Get current frame from camera stream.
+
+    If a LiveExperiment is running and has injected an annotated frame,
+    we serve that instead of the raw capture so the UI shows overlays
+    without a separate endpoint.
+    """
+    annotated = None
+    with camera_state["annotated_lock"]:
+        if camera_state["annotated_frame"] is not None:
+            annotated = camera_state["annotated_frame"].copy()
+
+    if annotated is not None:
+        _, buffer = cv2.imencode(".jpg", annotated)
+        return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
+
     if not camera_state["stream"]:
         raise HTTPException(status_code=400, detail="No active stream")
 
@@ -72,12 +91,10 @@ async def get_frame():
     if not ret:
         raise HTTPException(status_code=500, detail="Failed to read frame")
 
-    # Se está gravando, escrever o frame no vídeo
     if camera_state["recording"] and camera_state["recording"]["writer"]:
         camera_state["recording"]["writer"].write(frame)
 
-    # Encode frame as JPEG
-    _, buffer = cv2.imencode('.jpg', frame)
+    _, buffer = cv2.imencode(".jpg", frame)
     return StreamingResponse(io.BytesIO(buffer.tobytes()), media_type="image/jpeg")
 
 

@@ -243,15 +243,6 @@ start_services() {
     echo -e "   Parar:    ${CYAN}./run.sh stop${NC}"
     echo -e "   Logs:     ${CYAN}tail -f logs/*.log${NC}"
     echo ""
-
-    # Abrir navegador
-    if command -v xdg-open &> /dev/null; then
-        sleep 1
-        xdg-open "http://localhost:$FRONTEND_PORT" 2>/dev/null &
-    elif command -v open &> /dev/null; then
-        sleep 1
-        open "http://localhost:$FRONTEND_PORT" 2>/dev/null &
-    fi
 }
 
 # Parar serviços

@@ -258,6 +258,7 @@ stop_services() {
         PID=$(cat "$PID_DIR/backend.pid")
         if ps -p $PID > /dev/null 2>&1; then
             echo -e "${YELLOW}⏹${NC}  Parando Backend (PID: $PID)..."
+            pkill -TERM -P $PID 2>/dev/null || true
             kill $PID 2>/dev/null
             stopped=true
         fi
@@ -269,22 +270,25 @@ stop_services() {
         PID=$(cat "$PID_DIR/frontend.pid")
         if ps -p $PID > /dev/null 2>&1; then
             echo -e "${YELLOW}⏹${NC}  Parando Frontend (PID: $PID)..."
+            pkill -TERM -P $PID 2>/dev/null || true
             kill $PID 2>/dev/null
             stopped=true
         fi
         rm "$PID_DIR/frontend.pid"
     fi
 
-    # Fallback: matar processos nas portas
+    # Fallback: matar SOMENTE o processo escutando na porta (-sTCP:LISTEN).
+    # Sem o filtro, lsof devolve também os PIDs dos clientes conectados
+    # (incluindo o navegador), e o kill derruba a aba/janela do usuário.
     if check_port $BACKEND_PORT; then
-        echo -e "${YELLOW}⏹${NC}  Matando processos na porta $BACKEND_PORT..."
-        kill $(lsof -t -i:$BACKEND_PORT) 2>/dev/null || true
+        echo -e "${YELLOW}⏹${NC}  Matando processo escutando na porta $BACKEND_PORT..."
+        kill $(lsof -t -sTCP:LISTEN -i:$BACKEND_PORT) 2>/dev/null || true
         stopped=true
     fi
 
     if check_port $FRONTEND_PORT; then
-        echo -e "${YELLOW}⏹${NC}  Matando processos na porta $FRONTEND_PORT..."
-        kill $(lsof -t -i:$FRONTEND_PORT) 2>/dev/null || true
+        echo -e "${YELLOW}⏹${NC}  Matando processo escutando na porta $FRONTEND_PORT..."
+        kill $(lsof -t -sTCP:LISTEN -i:$FRONTEND_PORT) 2>/dev/null || true
         stopped=true
     fi
 

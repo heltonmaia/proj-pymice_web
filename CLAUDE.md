@@ -19,15 +19,19 @@ proj-pymice_web/
 │   ├── backend/          # FastAPI app
 │   │   └── app/
 │   │       ├── main.py        # Entry point + startup cleanup
-│   │       ├── routers/       # camera, video, tracking, roi, analysis, system
+│   │       ├── routers/       # camera, video, tracking, roi, analysis, system, experiment
 │   │       ├── models/        # Pydantic schemas
-│   │       └── processing/    # detection.py, tracking.py (YOLO + template matching)
+│   │       ├── processing/    # detection.py, tracking.py, live_experiment.py,
+│   │       │                  #   segment_writer.py, trigger_evaluator.py
+│   │       └── services/      # event_bus.py, integrations.py
 │   ├── frontend/         # React app
 │   │   └── src/
 │   │       ├── App.tsx        # Tab shell (locks tabs during tracking)
-│   │       ├── pages/         # One file per tab (CameraTab, TrackingTab, …)
+│   │       ├── pages/         # One per tab: TrackingTab, EthologicalTab,
+│   │       │                  #   ExperimentRecordingTab, ExtraToolsTab, IRLTab,
+│   │       │                  #   SyntheticTab, VisualizarResultadosTab
 │   │       ├── services/api.ts # Axios client, all backend endpoints
-│   │       └── components, hooks, store, types, utils
+│   │       └── components, hooks, types, utils
 │   ├── logs/             # Runtime logs (backend.log, frontend.log, *.pid)
 │   ├── run.sh            # Unified start/stop/status script
 │   └── setup_backend.sh  # Backend environment setup
@@ -56,7 +60,8 @@ proj-pymice_web/
   - `npm run build` — runs `tsc --noEmit` (type-check only, no JS emit) then `vite build` to `dist/`. Use this to verify TS before commits.
   - `npm run lint` — ESLint with `--max-warnings 0` (zero-warning policy).
   - `npm run preview` — preview the built bundle.
-- **Backend formatting/lint:** dev extras provide `black` (line-length 100), `isort` (black profile), `flake8`, `pytest`. Install with `uv pip install -e '.[dev]'`. There is no project-wide test suite yet; the standalone scripts in `pymice/backend/` (`test_cuda.py`, `test_sam3.py`, `test_outlier_filter.py`) are probes — run them directly with `python <file>` rather than via `pytest`.
+- **Backend formatting/lint:** dev extras provide `black` (line-length 100), `isort` (black profile), `flake8`, `pytest`. Install with `uv pip install -e '.[dev]'`.
+- **Backend tests:** a real suite now lives under `pymice/backend/tests/` (`test_event_bus.py`, `test_integration_http.py`, `test_integration_serial.py`, `test_live_experiment_loop.py`, `test_segment_writer.py`, `test_trigger_evaluator.py`) covering the experiment-recording stack. Run with `pytest` from `pymice/backend/` (asyncio_mode=auto is set in `pyproject.toml`); run a single file with `pytest tests/test_live_experiment_loop.py` or a single test with `pytest tests/test_live_experiment_loop.py::test_name`. The standalone scripts at the backend root (`test_cuda.py`, `test_sam3.py`, `test_outlier_filter.py`) are probes — run them directly with `python <file>`, not via pytest.
 
 ## API surface
 Routers are mounted in `app/main.py`:
@@ -74,7 +79,7 @@ CORS is hard-coded to `http://localhost:3000` and `http://localhost:5765` — up
 - Keep environment setup reproducible — any new Python dependency goes through `uv` and is reflected in `pyproject.toml` / `uv.lock`.
 - Frontend styling: Tailwind utility classes; dark mode is class-based (`dark:` variants throughout) and toggled via `components/ThemeToggle.tsx` + `hooks/useTheme.ts`. Avoid ad-hoc CSS unless necessary.
 - Frontend path alias: `@/` → `src/` (set in `vite.config.ts` and `tsconfig.json`). Use it for cross-tree imports.
-- Backend: follow FastAPI conventions (routers in `app/routers`, Pydantic schemas in `app/models`, processing/CV/ML logic in `app/processing`). `app/services` and `app/utils` exist but are currently empty — put cross-router helpers there rather than inline in routers.
+- Backend: follow FastAPI conventions (routers in `app/routers`, Pydantic schemas in `app/models`, processing/CV/ML logic in `app/processing`, cross-router runtime services in `app/services` — currently `event_bus.py` and `integrations.py`). `app/utils` exists but is empty; put pure helpers there rather than inline in routers.
 - Be mindful of CWD when running scripts — `run.sh` lives in `pymice/`, not the repo root, and the backend resolves `temp/` relative to `pymice/backend/`.
 
 ## Domain notes

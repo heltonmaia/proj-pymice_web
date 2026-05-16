@@ -14,6 +14,13 @@ interface Props {
 
 type View = 'setup' | 'live' | 'done'
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`
+  return `${(n / 1024 ** 3).toFixed(2)} GB`
+}
+
 export default function ExperimentRecordingTab({ onTrackingStateChange }: Props = {}) {
   const [view, setView] = useState<View>('setup')
   const [devices, setDevices] = useState<number[]>([])
@@ -27,7 +34,10 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const [models, setModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [outputDir, setOutputDir] = useState<string>('temp/experiments')
+  const [segmentMaxMb, setSegmentMaxMb] = useState<number>(1024)
   const [showFolderPicker, setShowFolderPicker] = useState(false)
+  const [liveSegmentIndex, setLiveSegmentIndex] = useState<number | null>(null)
+  const [doneFiles, setDoneFiles] = useState<import('@/types').ArtifactFile[]>([])
 
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -38,7 +48,6 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const [activeRoi, setActiveRoi] = useState<number | null>(null)
   const [events, setEvents] = useState<ExperimentEvent[]>([])
   const wsRef = useRef<WebSocket | null>(null)
-  const [artifacts, setArtifacts] = useState<Record<string, string> | null>(null)
   const [liveFps, setLiveFps] = useState<number | null>(null)
   const [liveFrames, setLiveFrames] = useState<number | null>(null)
 
@@ -146,6 +155,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
       inference_size: 640,
       triggers: [],
       output_base_dir: outputDir.trim() || 'temp/experiments',
+      segment_max_mb: segmentMaxMb,
     })
     if (!r.data.success || !r.data.data) {
       alert(`Failed to start experiment: ${r.data.error}`)
@@ -167,6 +177,9 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           if (typeof evt.fps_actual === 'number') setLiveFps(evt.fps_actual)
           if (typeof evt.frame_idx === 'number') setLiveFrames(evt.frame_idx)
         }
+        if (evt.type === 'segment_rotated' && typeof evt.new_index === 'number') {
+          setLiveSegmentIndex(evt.new_index)
+        }
         if (evt.type === 'stopped') {
           setView('done')
         }
@@ -176,24 +189,30 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   }
 
   const stopExperiment = async () => {
-    const r = await experimentApi.stop()
+    await experimentApi.stop()
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
-    if (r.data.success && r.data.data) {
-      setArtifacts(r.data.data.artifacts)
-    }
     setView('done')
   }
 
+  // When we transition into done, fetch the actual files list (segments + events + metadata).
+  useEffect(() => {
+    if (view !== 'done' || !expId) return
+    experimentApi.listArtifacts(expId)
+      .then((r) => setDoneFiles(r.data.data?.files ?? []))
+      .catch(() => setDoneFiles([]))
+  }, [view, expId])
+
   const reset = () => {
     setExpId(null)
-    setArtifacts(null)
     setEvents([])
     setActiveRoi(null)
     setLiveFps(null)
     setLiveFrames(null)
+    setLiveSegmentIndex(null)
+    setDoneFiles([])
     setView('setup')
   }
 
@@ -248,7 +267,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium mb-1">
               Brightness <span className="text-gray-500">({brightness})</span>
@@ -263,6 +282,24 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               disabled={!isStreaming || view === 'live'}
               className="w-full disabled:opacity-50"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Segment size <span className="text-gray-500">(MB)</span>
+            </label>
+            <input
+              type="number"
+              min={10}
+              max={10240}
+              step={64}
+              value={segmentMaxMb}
+              onChange={(e) => setSegmentMaxMb(Number(e.target.value))}
+              disabled={view === 'live'}
+              className="w-full bg-white dark:bg-gray-700 border rounded px-3 py-2"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Splits raw.mp4 into raw_NNN.mp4 every {segmentMaxMb} MB or 30 min — whichever comes first.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Output Folder</label>
@@ -389,22 +426,32 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               )}
             </div>
 
-            {view === 'done' && artifacts && expId && (
+            {view === 'done' && expId && (
               <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded">
-                <h3 className="font-medium mb-2">Artifacts</h3>
-                <ul className="space-y-1 text-sm">
-                  {(['raw.mp4', 'tracking.jsonl', 'events.jsonl', 'metadata.json'] as const).map((a) => (
-                    <li key={a}>
-                      <a
-                        href={experimentApi.artifactUrl(expId, a)}
-                        download
-                        className="text-primary-600 hover:underline inline-flex items-center gap-1"
-                      >
-                        <Download className="w-3 h-3" /> {a}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
+                <h3 className="font-medium mb-2">
+                  Artifacts <span className="text-xs text-gray-500">({doneFiles.length} files)</span>
+                </h3>
+                {doneFiles.length === 0 ? (
+                  <p className="text-sm text-gray-500">Loading…</p>
+                ) : (
+                  <ul className="space-y-1 text-sm max-h-64 overflow-auto">
+                    {doneFiles.map((f) => (
+                      <li key={f.name} className="flex items-center gap-2">
+                        <a
+                          href={experimentApi.artifactUrl(expId, f.name)}
+                          download
+                          className="text-primary-600 hover:underline inline-flex items-center gap-1 flex-1 min-w-0"
+                        >
+                          <Download className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{f.name}</span>
+                        </a>
+                        <span className="text-xs text-gray-500 flex-shrink-0">
+                          {f.kind} · {formatBytes(f.size)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>
@@ -433,6 +480,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
                   <div className="text-gray-500">exp_id: <code className="text-xs">{expId}</code></div>
                   <div className="text-gray-500">FPS: {liveFps != null ? liveFps.toFixed(1) : '—'}</div>
                   <div className="text-gray-500">Frames: {liveFrames ?? 0}</div>
+                  <div className="text-gray-500">Segment: #{liveSegmentIndex ?? 0}</div>
                   <div className="text-gray-500">Active ROI: {activeRoi ?? '—'}</div>
                 </>
               )}

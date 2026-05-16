@@ -1,14 +1,17 @@
 """Live experiment: capture, detect, record, emit events.
 
-The loop runs in a daemon thread; it reads from the global
+The detection loop runs in a daemon thread; it reads from the global
 `camera_state["stream"]` (managed by app.routers.camera), so the user
-must have started the stream before starting an experiment.
+must have started the stream before starting an experiment. Disk I/O
+runs in a separate WriterThread so that VideoWriter encoding never
+blocks the detection loop — the loop submits (frame, line) tuples to
+a bounded queue.
 
-Artifacts written to temp/experiments/<exp_id>/:
-  - raw.mp4         : raw frames from VideoWriter
-  - tracking.jsonl  : one JSON per frame
-  - events.jsonl    : one JSON per ROI/trigger/lifecycle event
-  - metadata.json   : config + state
+Artifacts written to <output_base_dir>/<exp_id>/:
+  - raw_NNN.mp4         : raw frames, segmented (≤ segment_max_mb each)
+  - tracking_NNN.jsonl  : one JSON per frame, segmented with the video
+  - events.jsonl        : one JSON per ROI/trigger/lifecycle event
+  - metadata.json       : config + state + segments index
 """
 
 import json
@@ -16,7 +19,7 @@ import os
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -24,6 +27,7 @@ import cv2
 import numpy as np
 
 from app.models.schemas import ExperimentStartRequest, ROIPreset, TriggerRule
+from app.processing.segment_writer import SegmentedRecorder, WriterThread
 from app.processing.tracking import get_roi_containing_point, draw_rois
 from app.processing.trigger_evaluator import TriggerEvaluator
 from app.services.event_bus import EventBus
@@ -102,8 +106,6 @@ def _best_detection(results) -> Optional[tuple]:
 @dataclass
 class LiveExperimentArtifacts:
     exp_dir: str
-    raw_video: str
-    tracking_jsonl: str
     events_jsonl: str
     metadata_json: str
 
@@ -142,12 +144,13 @@ class LiveExperiment:
 
         self.exp_id = f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
         self._artifacts = self._make_artifacts(base_dir)
-        self._writer: Optional[cv2.VideoWriter] = None
-        self._tracking_file = None
+        self._recorder: Optional[SegmentedRecorder] = None
+        self._writer_thread: Optional[WriterThread] = None
         self._events_file = None
         self._frames_processed = 0
         self._detections = 0
         self._events_emitted = 0
+        self._writes_dropped = 0
         self._last_active_roi: Optional[int] = None
         self._started_at_mono: Optional[float] = None
         self._started_at_iso: Optional[str] = None
@@ -158,8 +161,6 @@ class LiveExperiment:
         os.makedirs(exp_dir, exist_ok=True)
         return LiveExperimentArtifacts(
             exp_dir=exp_dir,
-            raw_video=os.path.join(exp_dir, "raw.mp4"),
-            tracking_jsonl=os.path.join(exp_dir, "tracking.jsonl"),
             events_jsonl=os.path.join(exp_dir, "events.jsonl"),
             metadata_json=os.path.join(exp_dir, "metadata.json"),
         )
@@ -175,12 +176,22 @@ class LiveExperiment:
         fps_native = cap.get(cv2.CAP_PROP_FPS) or 30.0
         fps_target = self.request.fps_target or fps_native
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        self._writer = cv2.VideoWriter(self._artifacts.raw_video, fourcc, fps_target, (width, height))
-        if not self._writer.isOpened():
-            raise RuntimeError("Failed to open VideoWriter")
+        segment_max_bytes = max(1, int(self.request.segment_max_mb)) * 1024 * 1024
+        segment_max_seconds = max(1.0, float(self.request.segment_max_seconds))
 
-        self._tracking_file = open(self._artifacts.tracking_jsonl, "w", buffering=1)
+        self._recorder = SegmentedRecorder(
+            base_dir=self._artifacts.exp_dir,
+            max_bytes=segment_max_bytes,
+            max_seconds=segment_max_seconds,
+            fps=fps_target,
+            size=(width, height),
+        )
+        self._writer_thread = WriterThread(
+            recorder=self._recorder,
+            on_rotate=self._on_segment_rotated,
+            on_drop=self._on_write_dropped,
+            max_queue=300,
+        )
         self._events_file = open(self._artifacts.events_jsonl, "w", buffering=1)
 
         self._started_at_mono = time.monotonic()
@@ -188,15 +199,41 @@ class LiveExperiment:
         self._state = "running"
         self._write_metadata()
 
-        started = {
-            "type": "started",
-            "exp_id": self.exp_id,
-            "started_at": self._started_at_iso,
-        }
-        self._emit(started)
+        self._emit(
+            {
+                "type": "started",
+                "exp_id": self.exp_id,
+                "started_at": self._started_at_iso,
+                "segment_max_mb": self.request.segment_max_mb,
+                "segment_max_seconds": self.request.segment_max_seconds,
+            }
+        )
 
+        self._writer_thread.start()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
+
+    def _on_segment_rotated(self, new_index: int) -> None:
+        self._emit(
+            {
+                "type": "segment_rotated",
+                "frame_idx": self._frames_processed,
+                "t": self._t_since_start(),
+                "new_index": new_index,
+            }
+        )
+        # Refresh metadata so external readers see the new segment immediately.
+        self._write_metadata()
+
+    def _on_write_dropped(self, frame_idx: int) -> None:
+        self._writes_dropped += 1
+        self._emit(
+            {
+                "type": "write_dropped",
+                "frame_idx": frame_idx,
+                "reason": "queue_full",
+            }
+        )
 
     def stop(self, reason: str = "user") -> None:
         if self._state != "running":
@@ -213,17 +250,20 @@ class LiveExperiment:
                 "reason": reason,
             }
         )
+        # Stop the writer thread last — it drains the queue and closes the
+        # current segment cleanly so the final mp4 is playable.
+        if self._writer_thread is not None:
+            self._writer_thread.stop(
+                final_frame_idx=max(0, self._frames_processed - 1),
+                final_t=self._t_since_start(),
+                timeout=10.0,
+            )
+            self._writer_thread = None
         try:
-            if self._writer is not None:
-                self._writer.release()
-        finally:
-            self._writer = None
-        for f in (self._tracking_file, self._events_file):
-            try:
-                if f is not None:
-                    f.close()
-            except Exception:
-                pass
+            if self._events_file is not None:
+                self._events_file.close()
+        except Exception:
+            pass
         self._write_metadata()
 
     # --- public mutators ---
@@ -256,6 +296,8 @@ class LiveExperiment:
     # --- status ---
 
     def status(self) -> dict:
+        segs = self._recorder.segments() if self._recorder is not None else []
+        queue_depth = self._writer_thread.queue_depth if self._writer_thread is not None else 0
         return {
             "exp_id": self.exp_id,
             "state": self._state,
@@ -265,6 +307,10 @@ class LiveExperiment:
             "detections": self._detections,
             "events_emitted": self._events_emitted,
             "last_active_roi": self._last_active_roi,
+            "segments": segs,
+            "current_segment_index": (segs[-1]["index"] if segs else None),
+            "writer_queue_depth": queue_depth,
+            "writes_dropped": self._writes_dropped,
         }
 
     # --- internals ---
@@ -298,7 +344,12 @@ class LiveExperiment:
                 "inference_size": self.request.inference_size,
                 "fps_target": self.request.fps_target,
                 "max_consecutive_drops": self.request.max_consecutive_drops,
+                "segment_max_mb": self.request.segment_max_mb,
+                "segment_max_seconds": self.request.segment_max_seconds,
             },
+            "segments": self._recorder.segments() if self._recorder is not None else [],
+            "frames_processed": self._frames_processed,
+            "writes_dropped": self._writes_dropped,
         }
         with open(self._artifacts.metadata_json, "w") as f:
             json.dump(meta, f, indent=2)
@@ -442,9 +493,10 @@ class LiveExperiment:
                 "active_roi": active_roi,
                 "detection_method": "yolo" if detection else "none",
             }
-            self._tracking_file.write(json.dumps(line) + "\n")
+            # Submit to writer thread (non-blocking; queue-full ⇒ on_drop callback fires).
+            assert self._writer_thread is not None
+            self._writer_thread.submit(frame, line, frame_idx, t)
 
-            self._writer.write(frame)
             annotated_frame = frame.copy()
             draw_rois(annotated_frame, rois, active_roi_index=active_roi)
             if centroid is not None:

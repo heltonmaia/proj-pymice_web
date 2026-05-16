@@ -239,6 +239,25 @@ export interface ExperimentStartRequest {
   max_consecutive_drops?: number
   triggers?: TriggerRule[]
   output_base_dir?: string
+  segment_max_mb?: number
+  segment_max_seconds?: number
+}
+
+export interface SegmentInfo {
+  index: number
+  video: string
+  tracking: string
+  frame_start: number
+  frame_end: number | null
+  started_at_sec: number
+  ended_at_sec: number | null
+  bytes: number
+}
+
+export interface ArtifactFile {
+  name: string
+  kind: 'video' | 'tracking' | 'events' | 'metadata' | 'other'
+  size: number
 }
 
 export interface ExperimentStatus {

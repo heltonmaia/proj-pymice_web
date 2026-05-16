@@ -289,6 +289,8 @@ class ExperimentStartRequest(BaseModel):
     max_consecutive_drops: int = 30
     triggers: List[TriggerRule] = Field(default_factory=list)
     output_base_dir: str = "temp/experiments"
+    segment_max_mb: int = Field(default=1024, ge=10, le=10240)  # 1 GB default, range 10 MB–10 GB
+    segment_max_seconds: int = Field(default=1800, ge=10, le=86400)  # 30 min default, range 10 s–24 h
 
 
 class ExperimentStatus(BaseModel):

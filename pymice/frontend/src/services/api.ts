@@ -300,7 +300,17 @@ export const systemApi = {
 export const experimentApi = {
   start: (req: ExperimentStartRequest) =>
     api.post<ApiResponse<{ exp_id: string; ws_url: string }>>('/experiment/start', req),
-  stop: () => api.post<ApiResponse<{ exp_id: string; artifacts: Record<string, string> }>>('/experiment/stop'),
+  stop: () => api.post<ApiResponse<{
+    exp_id: string
+    exp_dir: string
+    segments: import('@/types').SegmentInfo[]
+  }>>('/experiment/stop'),
+  listArtifacts: (expId: string) =>
+    api.get<ApiResponse<{
+      exp_id: string
+      exp_dir: string
+      files: import('@/types').ArtifactFile[]
+    }>>(`/experiment/artifacts/${expId}`),
   status: () => api.get<ApiResponse<ExperimentStatus>>('/experiment/status'),
 
   listIntegrations: () =>
@@ -326,8 +336,9 @@ export const experimentApi = {
   pauseRoiEval: (paused: boolean) =>
     api.post<ApiResponse<{ paused: boolean }>>(`/experiment/rois/pause-eval?paused=${paused}`),
 
-  artifactUrl: (expId: string, artifact: 'raw.mp4' | 'tracking.jsonl' | 'events.jsonl' | 'metadata.json') =>
-    `/api/experiment/artifacts/${expId}/${artifact}`,
+  /** Build a download URL for any segment or fixed file (raw_NNN.mp4 / tracking_NNN.jsonl / events.jsonl / metadata.json). */
+  artifactUrl: (expId: string, artifact: string) =>
+    `/api/experiment/artifacts/${expId}/${encodeURIComponent(artifact)}`,
 
   /** Open a WebSocket on /api/experiment/events. Caller manages lifecycle. */
   subscribeEvents: (onEvent: (e: ExperimentEvent) => void, onClose?: () => void): WebSocket => {

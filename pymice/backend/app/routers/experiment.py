@@ -9,6 +9,7 @@ Owns:
 
 import asyncio
 import os
+import re
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -152,15 +153,59 @@ async def stop_experiment():
     if exp is None or exp._state != "running":
         raise HTTPException(status_code=404, detail="No running experiment")
     exp.stop("user")
-    artifacts = {
-        "raw_video": exp._artifacts.raw_video,
-        "tracking_jsonl": exp._artifacts.tracking_jsonl,
-        "events_jsonl": exp._artifacts.events_jsonl,
-        "metadata_json": exp._artifacts.metadata_json,
-    }
     with camera_state["annotated_lock"]:
         camera_state["annotated_frame"] = None
-    return ApiResponse(success=True, data={"exp_id": exp.exp_id, "artifacts": artifacts})
+    return ApiResponse(
+        success=True,
+        data={
+            "exp_id": exp.exp_id,
+            "exp_dir": exp._artifacts.exp_dir,
+            "segments": exp._recorder.segments() if exp._recorder is not None else [],
+        },
+    )
+
+
+@router.get("/artifacts/{exp_id}")
+async def artifacts_list(exp_id: str):
+    """List every file inside the experiment directory with size+kind metadata."""
+    # find the exp_dir under any known output base — checking ./temp/experiments first
+    # plus the recorded exp_dir on the singleton if it matches.
+    candidate_dirs = ["temp/experiments"]
+    exp = _experiment_state["current"]
+    if exp is not None and exp.exp_id == exp_id:
+        candidate_dirs.insert(0, os.path.dirname(exp._artifacts.exp_dir))
+    exp_dir = None
+    for base in candidate_dirs:
+        path = os.path.join(base, exp_id)
+        if os.path.isdir(path):
+            exp_dir = path
+            break
+    if exp_dir is None:
+        raise HTTPException(status_code=404, detail="experiment not found")
+
+    files = []
+    for name in sorted(os.listdir(exp_dir)):
+        full = os.path.join(exp_dir, name)
+        if not os.path.isfile(full):
+            continue
+        kind = (
+            "video" if name.startswith("raw_") and name.endswith(".mp4")
+            else "tracking" if name.startswith("tracking_") and name.endswith(".jsonl")
+            else "events" if name == "events.jsonl"
+            else "metadata" if name == "metadata.json"
+            else "other"
+        )
+        files.append(
+            {
+                "name": name,
+                "kind": kind,
+                "size": os.path.getsize(full),
+            }
+        )
+    return ApiResponse(
+        success=True,
+        data={"exp_id": exp_id, "exp_dir": exp_dir, "files": files},
+    )
 
 
 @router.get("/status")
@@ -315,12 +360,21 @@ async def rois_pause_eval(paused: bool = True):
 
 # --- artifact download ---
 
+_ARTIFACT_NAME_RE = re.compile(
+    r"^(raw_\d{3}\.mp4|tracking_\d{3}\.jsonl|events\.jsonl|metadata\.json)$"
+)
+
+
 @router.get("/artifacts/{exp_id}/{artifact}")
 async def artifact_download(exp_id: str, artifact: str):
-    allowed = {"raw.mp4", "tracking.jsonl", "events.jsonl", "metadata.json"}
-    if artifact not in allowed:
-        raise HTTPException(status_code=400, detail="invalid artifact")
-    path = os.path.join("temp/experiments", exp_id, artifact)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(path, filename=f"{exp_id}_{artifact}")
+    if not _ARTIFACT_NAME_RE.match(artifact):
+        raise HTTPException(status_code=400, detail="invalid artifact name")
+    candidate_dirs = ["temp/experiments"]
+    exp = _experiment_state["current"]
+    if exp is not None and exp.exp_id == exp_id:
+        candidate_dirs.insert(0, os.path.dirname(exp._artifacts.exp_dir))
+    for base in candidate_dirs:
+        path = os.path.join(base, exp_id, artifact)
+        if os.path.exists(path):
+            return FileResponse(path, filename=f"{exp_id}_{artifact}")
+    raise HTTPException(status_code=404, detail="not found")

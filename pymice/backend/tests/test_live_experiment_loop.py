@@ -137,7 +137,14 @@ async def test_loop_writes_tracking_and_roi_events(in_tmp_workspace):
         time.sleep(2.0)
         exp.stop("test")
 
-    tracking_lines = Path(exp._artifacts.tracking_jsonl).read_text().splitlines()
+    # Tracking lines now span across one or more segment files.
+    tracking_lines = []
+    raw_total_bytes = 0
+    exp_dir = Path(exp._artifacts.exp_dir)
+    for tf in sorted(exp_dir.glob("tracking_*.jsonl")):
+        tracking_lines.extend(tf.read_text().splitlines())
+    for vf in exp_dir.glob("raw_*.mp4"):
+        raw_total_bytes += os.path.getsize(vf)
     events_lines = Path(exp._artifacts.events_jsonl).read_text().splitlines()
 
     assert len(tracking_lines) >= 6
@@ -146,7 +153,7 @@ async def test_loop_writes_tracking_and_roi_events(in_tmp_workspace):
     assert types.count("roi_entry") >= 2
     assert types.count("roi_exit") >= 2
     assert "stopped" in types
-    assert os.path.getsize(exp._artifacts.raw_video) > 0
+    assert raw_total_bytes > 0
 
 
 @pytest.mark.asyncio

@@ -173,8 +173,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <Camera className="w-5 h-5 text-primary-500" />
           Experiment Recording
@@ -355,18 +355,26 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
         )}
       </div>
 
-      {view === 'setup' && (
-        <>
-          <IntegrationsPanel />
-          <TriggersPanel disabled />
-        </>
-      )}
-      {view === 'live' && expId && (
-        <>
-          <TriggersPanel expId={expId} />
-          <EventLogPanel events={events} />
-        </>
-      )}
+      <div className="space-y-6 lg:col-span-1">
+        {view === 'setup' && (
+          <>
+            <IntegrationsPanel />
+            <TriggersPanel disabled />
+          </>
+        )}
+        {view === 'live' && expId && (
+          <>
+            <IntegrationsPanel />
+            <TriggersPanel expId={expId} />
+            <EventLogPanel events={events} />
+          </>
+        )}
+        {view === 'done' && (
+          <>
+            <IntegrationsPanel />
+          </>
+        )}
+      </div>
 
       {showFolderPicker && (
         <FolderPickerModal

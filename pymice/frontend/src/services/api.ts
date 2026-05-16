@@ -286,6 +286,15 @@ export const systemApi = {
       cpu_time: number
       speedup: number
     }>>('/system/test-yolo', { model_name: modelName }),
+
+  browse: (path: string = '') =>
+    api.get<ApiResponse<{
+      current_path: string
+      parent: string | null
+      home: string
+      directories: { name: string; writable: boolean }[]
+      writable: boolean
+    }>>(`/system/browse${path ? `?path=${encodeURIComponent(path)}` : ''}`),
 }
 
 export const experimentApi = {

@@ -1,11 +1,55 @@
 """System diagnostics API endpoints"""
 
 from fastapi import APIRouter, HTTPException
+import os
 import time
 
 from app.models.schemas import ApiResponse, GPUStatus, YOLOTestResult
 
 router = APIRouter()
+
+
+@router.get("/browse")
+async def browse_directory(path: str = ""):
+    """List subdirectories at the given path (for the output-folder picker).
+
+    Empty path defaults to the user's home. Returns absolute paths.
+    """
+    if not path:
+        path = os.path.expanduser("~")
+    path = os.path.abspath(os.path.expanduser(path))
+
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+    try:
+        entries = os.listdir(path)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
+
+    dirs = []
+    for name in sorted(entries, key=str.lower):
+        if name.startswith("."):
+            continue  # hide dotfiles by default
+        full = os.path.join(path, name)
+        if os.path.isdir(full):
+            try:
+                writable = os.access(full, os.W_OK)
+            except Exception:
+                writable = False
+            dirs.append({"name": name, "writable": writable})
+
+    parent = os.path.dirname(path) if path != "/" else None
+    return ApiResponse(
+        success=True,
+        data={
+            "current_path": path,
+            "parent": parent,
+            "home": os.path.expanduser("~"),
+            "directories": dirs,
+            "writable": os.access(path, os.W_OK),
+        },
+    )
 
 
 @router.get("/gpu")

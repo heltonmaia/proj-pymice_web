@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Camera, Square, Circle, Play, StopCircle, Download } from 'lucide-react'
+import { Camera, Square, Circle, Play, StopCircle, Download, FolderOpen } from 'lucide-react'
 import { cameraApi, experimentApi, trackingApi } from '@/services/api'
 import ROICanvas from '@/components/ROICanvas'
 import type { ROI, ROIPreset, ExperimentEvent } from '@/types'
 import IntegrationsPanel from '@/components/IntegrationsPanel'
 import TriggersPanel from '@/components/TriggersPanel'
 import EventLogPanel from '@/components/EventLogPanel'
+import FolderPickerModal from '@/components/FolderPickerModal'
 
 interface Props {
   onTrackingStateChange?: (isActive: boolean) => void
@@ -26,6 +27,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const [models, setModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [outputDir, setOutputDir] = useState<string>('temp/experiments')
+  const [showFolderPicker, setShowFolderPicker] = useState(false)
 
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null)
   const pollRef = useRef<number | null>(null)
@@ -250,14 +252,24 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Output Folder</label>
-            <input
-              type="text"
-              value={outputDir}
-              onChange={(e) => setOutputDir(e.target.value)}
-              disabled={view === 'live'}
-              placeholder="temp/experiments"
-              className="w-full bg-white dark:bg-gray-700 border rounded px-3 py-2 font-mono text-sm"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={outputDir}
+                onChange={(e) => setOutputDir(e.target.value)}
+                disabled={view === 'live'}
+                placeholder="temp/experiments"
+                className="flex-1 bg-white dark:bg-gray-700 border rounded px-3 py-2 font-mono text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowFolderPicker(true)}
+                disabled={view === 'live'}
+                className="px-3 py-2 border rounded inline-flex items-center gap-1 text-sm disabled:opacity-50 bg-white dark:bg-gray-700"
+              >
+                <FolderOpen className="w-4 h-4" /> Browse...
+              </button>
+            </div>
             <p className="text-xs text-gray-500 mt-1">
               Backend creates <code>&lt;folder&gt;/&lt;exp_id&gt;/</code> with raw.mp4, tracking.jsonl, events.jsonl, metadata.json
             </p>
@@ -350,6 +362,17 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           <TriggersPanel expId={expId} />
           <EventLogPanel events={events} />
         </>
+      )}
+
+      {showFolderPicker && (
+        <FolderPickerModal
+          initialPath={outputDir}
+          onSelect={(path) => {
+            setOutputDir(path)
+            setShowFolderPicker(false)
+          }}
+          onClose={() => setShowFolderPicker(false)}
+        />
       )}
     </div>
   )

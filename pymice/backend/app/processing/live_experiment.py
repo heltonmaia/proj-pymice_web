@@ -115,16 +115,19 @@ class LiveExperiment:
         event_bus: EventBus,
         stream_provider,
         annotated_frame_setter,
+        action_dispatcher=None,
         base_dir: str = "temp/experiments",
     ):
         """
         stream_provider:           callable that returns the current cv2.VideoCapture or None
         annotated_frame_setter:    callable(np.ndarray) -> stores frame in shared buffer
+        action_dispatcher:         callable(rule, event) -> result dict, or None for no-op
         """
         self.request = request
         self._bus = event_bus
         self._stream_provider = stream_provider
         self._annotated_frame_setter = annotated_frame_setter
+        self._dispatch_action = action_dispatcher or (lambda rule, evt: {"ok": True, "skipped": "no_dispatcher"})
         self._stop_flag = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._rois_lock = threading.Lock()
@@ -412,7 +415,22 @@ class LiveExperiment:
             with self._triggers_lock:
                 fires = self._evaluator.evaluate(events_this_frame)
             for fire in fires:
-                self._emit({"type": "trigger", **fire})
+                if fire.get("skipped"):
+                    self._emit({"type": "trigger", **fire})
+                    continue
+                try:
+                    result = self._dispatch_action(fire["rule"], fire)
+                except Exception as e:
+                    result = {"ok": False, "error": str(e)}
+                self._emit(
+                    {
+                        "type": "trigger",
+                        "trigger_id": fire["trigger_id"],
+                        "frame_idx": fire["frame_idx"],
+                        "t": fire["t"],
+                        "result": result,
+                    }
+                )
 
             line = {
                 "frame_idx": frame_idx,

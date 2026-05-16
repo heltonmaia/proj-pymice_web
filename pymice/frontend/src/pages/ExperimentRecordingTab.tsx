@@ -40,12 +40,18 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
 
   useEffect(() => {
     cameraApi.listDevices().then((r) => {
-      const list = Array.isArray(r.data.data) ? r.data.data : []
+      const data = r.data.data as unknown
+      const list: number[] = Array.isArray(data)
+        ? (data as number[])
+        : (data as { devices?: number[] })?.devices ?? []
       setDevices(list)
       if (list.length > 0) setSelectedDevice(list[0])
     })
     trackingApi.listModels().then((r) => {
-      const list = r.data.data || []
+      const data = r.data.data as unknown
+      const list: string[] = Array.isArray(data)
+        ? (data as string[])
+        : (data as { models?: string[] })?.models ?? []
       setModels(list)
       if (list.length > 0) setSelectedModel(list[0])
     })

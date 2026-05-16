@@ -7,6 +7,12 @@ import type {
   ROIPreset,
   ProcessingProgress,
   HeatmapSettings,
+  Integration,
+  TriggerRule,
+  ExperimentStartRequest,
+  ExperimentStatus,
+  SerialPort,
+  ExperimentEvent,
 } from '@/types'
 
 const api = axios.create({
@@ -271,6 +277,55 @@ export const systemApi = {
       cpu_time: number
       speedup: number
     }>>('/system/test-yolo', { model_name: modelName }),
+}
+
+export const experimentApi = {
+  start: (req: ExperimentStartRequest) =>
+    api.post<ApiResponse<{ exp_id: string; ws_url: string }>>('/experiment/start', req),
+  stop: () => api.post<ApiResponse<{ exp_id: string; artifacts: Record<string, string> }>>('/experiment/stop'),
+  status: () => api.get<ApiResponse<ExperimentStatus>>('/experiment/status'),
+
+  listIntegrations: () =>
+    api.get<ApiResponse<{ integrations: Integration[] }>>('/experiment/integrations'),
+  createIntegration: (i: Integration) =>
+    api.post<ApiResponse<Integration>>('/experiment/integrations', i),
+  deleteIntegration: (id: string, force = false) =>
+    api.delete<ApiResponse<{ deleted: string }>>(`/experiment/integrations/${id}${force ? '?force=true' : ''}`),
+  testIntegration: (id: string) =>
+    api.post<ApiResponse<{ ok: boolean; status_code?: number; latency_ms?: number; error?: string }>>(`/experiment/integrations/${id}/test`),
+  listSerialPorts: () =>
+    api.get<ApiResponse<{ ports: SerialPort[] }>>('/experiment/serial-ports'),
+
+  listTriggers: () =>
+    api.get<ApiResponse<{ triggers: TriggerRule[] }>>('/experiment/triggers'),
+  createTrigger: (r: TriggerRule) =>
+    api.post<ApiResponse<TriggerRule>>('/experiment/triggers', r),
+  deleteTrigger: (id: string) =>
+    api.delete<ApiResponse<{ deleted: string }>>(`/experiment/triggers/${id}`),
+
+  updateRois: (preset: ROIPreset) =>
+    api.post<ApiResponse<{ updated: boolean }>>('/experiment/rois', preset),
+  pauseRoiEval: (paused: boolean) =>
+    api.post<ApiResponse<{ paused: boolean }>>(`/experiment/rois/pause-eval?paused=${paused}`),
+
+  artifactUrl: (expId: string, artifact: 'raw.mp4' | 'tracking.jsonl' | 'events.jsonl' | 'metadata.json') =>
+    `/api/experiment/artifacts/${expId}/${artifact}`,
+
+  /** Open a WebSocket on /api/experiment/events. Caller manages lifecycle. */
+  subscribeEvents: (onEvent: (e: ExperimentEvent) => void, onClose?: () => void): WebSocket => {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${proto}//${window.location.host}/api/experiment/events`)
+    ws.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data) as ExperimentEvent
+        onEvent(data)
+      } catch {
+        // ignore malformed
+      }
+    }
+    if (onClose) ws.onclose = onClose
+    return ws
+  },
 }
 
 export default api

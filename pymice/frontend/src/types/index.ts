@@ -179,3 +179,82 @@ export interface AppTab {
   label: string;
   icon: string;
 }
+
+// --- Experiment Recording ---
+
+export type SerialPort = { device: string; description: string; hwid: string }
+
+export type IntegrationKind = 'serial' | 'http'
+
+export interface IntegrationConfigSerial {
+  port: string
+  baud: number
+  newline: string
+}
+
+export interface IntegrationConfigHttp {
+  base_url: string
+  default_method: 'GET' | 'POST' | 'PUT'
+  default_timeout_sec: number
+  headers: Record<string, string>
+}
+
+export interface Integration {
+  id: string
+  name: string
+  kind: IntegrationKind
+  config: IntegrationConfigSerial | IntegrationConfigHttp
+}
+
+export interface TriggerMatch {
+  event_type: 'roi_entry' | 'roi_exit' | 'tick' | 'frame_drop'
+  roi_name?: string | null
+  min_dwell_sec?: number | null
+  cooldown_sec?: number | null
+}
+
+export interface TriggerAction {
+  integration_id?: string | null
+  kind: 'integration' | 'log'
+  payload?: string | Record<string, unknown> | null
+  label?: string | null
+  timeout_sec?: number
+}
+
+export interface TriggerRule {
+  id: string
+  name: string
+  match: TriggerMatch
+  action: TriggerAction
+}
+
+export interface ExperimentStartRequest {
+  device_id: number
+  model_name: string
+  rois: ROIPreset
+  confidence_threshold?: number
+  iou_threshold?: number
+  inference_size?: number
+  fps_target?: number | null
+  max_consecutive_drops?: number
+  triggers?: TriggerRule[]
+}
+
+export interface ExperimentStatus {
+  exp_id?: string | null
+  state: 'idle' | 'running' | 'stopped' | 'crashed'
+  started_at?: string | null
+  frames_processed: number
+  fps_actual: number
+  detections: number
+  events_emitted: number
+  last_active_roi?: number | null
+}
+
+export interface ExperimentEvent {
+  type: string
+  frame_idx?: number
+  t?: number
+  // additional fields per type
+  [k: string]: unknown
+}

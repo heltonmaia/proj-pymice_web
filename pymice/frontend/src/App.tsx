@@ -3,7 +3,7 @@ import { Camera, Target, BarChart3, Wrench, Globe, Eye } from 'lucide-react'
 import MouseIcon from './components/MouseIcon'
 import AnimatedMouse from './components/AnimatedMouse'
 import ThemeToggle from './components/ThemeToggle'
-import CameraTab from './pages/CameraTab'
+import ExperimentRecordingTab from './pages/ExperimentRecordingTab'
 import TrackingTab from './pages/TrackingTab'
 import EthologicalTab from './pages/EthologicalTab'
 import VisualizarResultadosTab from './pages/VisualizarResultadosTab'
@@ -11,7 +11,7 @@ import ExtraToolsTab from './pages/ExtraToolsTab'
 import IRLTab from './pages/IRLTab'
 
 const tabs = [
-  { id: 'camera', label: 'Camera', icon: Camera, component: CameraTab },
+  { id: 'camera', label: 'Experiment Recording', icon: Camera, component: ExperimentRecordingTab },
   { id: 'tracking', label: 'Tracking', icon: Target, component: TrackingTab },
   { id: 'ethological', label: 'Ethological Analysis', icon: BarChart3, component: EthologicalTab },
   { id: 'irl', label: 'IRL Analysis', icon: Globe, component: IRLTab },
@@ -23,7 +23,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('camera')
   const [isTabLocked, setIsTabLocked] = useState(false)
 
-  const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || CameraTab
+  const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || ExperimentRecordingTab
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">

@@ -21,14 +21,82 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 import cv2
+import numpy as np
 
 from app.models.schemas import ExperimentStartRequest, ROIPreset, TriggerRule
+from app.processing.tracking import get_roi_containing_point, draw_rois
 from app.processing.trigger_evaluator import TriggerEvaluator
 from app.services.event_bus import EventBus
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _load_yolo_model(model_path: str):
+    """Indirected for testability."""
+    from ultralytics import YOLO
+    return YOLO(model_path)
+
+
+def _best_detection(results) -> Optional[tuple]:
+    """Pick the highest-confidence box from Ultralytics results.
+    Returns (centroid_x, centroid_y, bbox_xyxy, confidence) or None.
+
+    Handles both real Ultralytics Boxes (vectorised .conf / .xyxy tensors) and
+    a list of individual box objects with scalar .conf / .xyxy attributes (used
+    by the fake in tests).
+    """
+    if not results:
+        return None
+    r = results[0]
+    boxes = getattr(r, "boxes", None)
+    if boxes is None or len(boxes) == 0:
+        return None
+
+    # Real Ultralytics Boxes: vectorised .conf and .xyxy attributes
+    if hasattr(boxes, "conf") and hasattr(boxes, "xyxy"):
+        confs = boxes.conf
+        if hasattr(confs, "cpu"):
+            confs = confs.cpu().numpy()
+        elif hasattr(confs, "numpy"):
+            confs = confs.numpy()
+        else:
+            confs = np.asarray(confs)
+        idx = int(np.argmax(confs))
+        xyxy = boxes.xyxy
+        if hasattr(xyxy, "cpu"):
+            xyxy = xyxy.cpu().numpy()
+        elif hasattr(xyxy, "numpy"):
+            xyxy = xyxy.numpy()
+        else:
+            xyxy = np.asarray(xyxy)
+        x1, y1, x2, y2 = xyxy[idx]
+        return (
+            int((x1 + x2) / 2),
+            int((y1 + y2) / 2),
+            [float(x1), float(y1), float(x2), float(y2)],
+            float(confs[idx]),
+        )
+
+    # List of individual box objects (each with scalar .conf / .xyxy)
+    best_box = None
+    best_conf = -1.0
+    for box in boxes:
+        conf_val = float(np.asarray(box.conf).flat[0])
+        if conf_val > best_conf:
+            best_conf = conf_val
+            best_box = box
+    if best_box is None:
+        return None
+    xyxy = np.asarray(best_box.xyxy).flatten()
+    x1, y1, x2, y2 = xyxy[:4]
+    return (
+        int((x1 + x2) / 2),
+        int((y1 + y2) / 2),
+        [float(x1), float(y1), float(x2), float(y2)],
+        best_conf,
+    )
 
 
 @dataclass
@@ -233,5 +301,151 @@ class LiveExperiment:
             json.dump(meta, f, indent=2)
 
     def _loop(self) -> None:
-        """Implemented in Task 7."""
-        raise NotImplementedError
+        model_path = os.path.join("temp/models", self.request.model_name)
+        if not os.path.exists(model_path):
+            self._emit(
+                {"type": "stopped", "frame_idx": 0, "t": 0.0, "reason": "model_missing"}
+            )
+            self._state = "stopped"
+            return
+
+        try:
+            model = _load_yolo_model(model_path)
+        except Exception as e:
+            self._emit({"type": "stopped", "reason": f"model_load_error: {e}"})
+            self._state = "stopped"
+            return
+
+        consecutive_drops = 0
+        max_drops = self.request.max_consecutive_drops
+        tick_interval = 1.0
+        last_tick = 0.0
+
+        while not self._stop_flag.is_set():
+            cap = self._stream_provider()
+            if cap is None:
+                consecutive_drops += 1
+                self._emit({"type": "frame_drop", "frame_idx": self._frames_processed})
+                if consecutive_drops >= max_drops:
+                    self._state = "stopped"
+                    self._emit(
+                        {"type": "stopped", "frame_idx": self._frames_processed,
+                         "t": self._t_since_start(), "reason": "stream_lost"}
+                    )
+                    break
+                time.sleep(0.05)
+                continue
+
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                consecutive_drops += 1
+                self._emit({"type": "frame_drop", "frame_idx": self._frames_processed})
+                if consecutive_drops >= max_drops:
+                    self._state = "stopped"
+                    self._emit(
+                        {"type": "stopped", "frame_idx": self._frames_processed,
+                         "t": self._t_since_start(), "reason": "stream_lost"}
+                    )
+                    break
+                time.sleep(0.01)
+                continue
+            consecutive_drops = 0
+
+            frame_idx = self._frames_processed
+            t = self._t_since_start()
+
+            try:
+                results = model.predict(
+                    frame,
+                    conf=self.request.confidence_threshold,
+                    iou=self.request.iou_threshold,
+                    imgsz=self.request.inference_size,
+                    verbose=False,
+                )
+            except Exception as e:
+                self._emit({"type": "stopped", "reason": f"detector_error: {e}"})
+                self._state = "stopped"
+                break
+
+            detection = _best_detection(results)
+            if detection is not None:
+                cx, cy, bbox, conf = detection
+                self._detections += 1
+                centroid = (cx, cy)
+            else:
+                cx, cy, bbox, conf = None, None, None, None
+                centroid = None
+
+            active_roi: Optional[int] = None
+            with self._rois_lock:
+                rois = list(self._rois)
+                roi_names = list(self._roi_names)
+            if not self._paused_roi_eval and centroid is not None:
+                active_roi = get_roi_containing_point(centroid, rois)
+
+            events_this_frame: list = []
+            if not self._paused_roi_eval and active_roi != self._last_active_roi:
+                if self._last_active_roi is not None:
+                    evt = {
+                        "type": "roi_exit",
+                        "frame_idx": frame_idx,
+                        "t": t,
+                        "roi_index": self._last_active_roi,
+                        "roi_name": roi_names[self._last_active_roi]
+                            if self._last_active_roi < len(roi_names) else None,
+                    }
+                    events_this_frame.append(evt)
+                    self._emit(evt)
+                if active_roi is not None:
+                    evt = {
+                        "type": "roi_entry",
+                        "frame_idx": frame_idx,
+                        "t": t,
+                        "roi_index": active_roi,
+                        "roi_name": roi_names[active_roi]
+                            if active_roi < len(roi_names) else None,
+                    }
+                    events_this_frame.append(evt)
+                    self._emit(evt)
+                self._last_active_roi = active_roi
+
+            with self._triggers_lock:
+                fires = self._evaluator.evaluate(events_this_frame)
+            for fire in fires:
+                self._emit({"type": "trigger", **fire})
+
+            line = {
+                "frame_idx": frame_idx,
+                "t_capture_sec": t,
+                "centroid_x": cx,
+                "centroid_y": cy,
+                "bbox": bbox,
+                "confidence": conf,
+                "active_roi": active_roi,
+                "detection_method": "yolo" if detection else "none",
+            }
+            self._tracking_file.write(json.dumps(line) + "\n")
+
+            self._writer.write(frame)
+            annotated_frame = frame.copy()
+            draw_rois(annotated_frame, rois, active_roi_index=active_roi)
+            if centroid is not None:
+                cv2.circle(annotated_frame, centroid, 4, (0, 0, 255), -1)
+                if bbox is not None:
+                    x1, y1, x2, y2 = (int(v) for v in bbox)
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            self._annotated_frame_setter(annotated_frame)
+
+            self._frames_processed += 1
+
+            if t - last_tick >= tick_interval:
+                self._emit(
+                    {
+                        "type": "tick",
+                        "frame_idx": frame_idx,
+                        "t": t,
+                        "fps_actual": self._fps_actual(),
+                        "active_roi": active_roi,
+                    }
+                )
+                last_tick = t

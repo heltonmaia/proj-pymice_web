@@ -39,6 +39,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   const [events, setEvents] = useState<ExperimentEvent[]>([])
   const wsRef = useRef<WebSocket | null>(null)
   const [artifacts, setArtifacts] = useState<Record<string, string> | null>(null)
+  const [liveFps, setLiveFps] = useState<number | null>(null)
+  const [liveFrames, setLiveFrames] = useState<number | null>(null)
 
   useEffect(() => {
     onTrackingStateChange?.(view === 'live')
@@ -158,8 +160,12 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
         setEvents((prev) => [...prev.slice(-200), evt])
         if (evt.type === 'roi_entry') setActiveRoi(evt.roi_index as number)
         if (evt.type === 'roi_exit') setActiveRoi(null)
-        if (evt.type === 'tick' && typeof evt.active_roi !== 'undefined') {
-          setActiveRoi((evt.active_roi as number | null) ?? null)
+        if (evt.type === 'tick') {
+          if (typeof evt.active_roi !== 'undefined') {
+            setActiveRoi((evt.active_roi as number | null) ?? null)
+          }
+          if (typeof evt.fps_actual === 'number') setLiveFps(evt.fps_actual)
+          if (typeof evt.frame_idx === 'number') setLiveFrames(evt.frame_idx)
         }
         if (evt.type === 'stopped') {
           setView('done')
@@ -186,6 +192,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
     setArtifacts(null)
     setEvents([])
     setActiveRoi(null)
+    setLiveFps(null)
+    setLiveFrames(null)
     setView('setup')
   }
 
@@ -197,7 +205,7 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           Experiment Recording
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium mb-1">Camera Device</label>
             <select
@@ -237,18 +245,6 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
             >
               {models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={isStreaming ? stopStream : startStream}
-              disabled={view === 'live'}
-              className={`w-full px-4 py-2 rounded text-white ${
-                isStreaming ? 'bg-red-600' : 'bg-primary-600'
-              } disabled:opacity-50`}
-            >
-              {isStreaming ? (<><Square className="inline w-4 h-4 mr-2" /> Stop Preview</>) :
-                            (<><Circle className="inline w-4 h-4 mr-2" /> Start Preview</>)}
-            </button>
           </div>
         </div>
 
@@ -336,7 +332,20 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
               tool={tool}
             />
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3 items-start">
+              {view !== 'live' && (
+                <button
+                  onClick={isStreaming ? stopStream : startStream}
+                  disabled={view === 'done'}
+                  className={`px-4 py-2 rounded text-white flex items-center gap-2 disabled:opacity-50 ${
+                    isStreaming ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700'
+                  }`}
+                >
+                  {isStreaming
+                    ? <><Square className="w-4 h-4" /> Stop Preview</>
+                    : <><Circle className="w-4 h-4" /> Start Preview</>}
+                </button>
+              )}
               {view === 'setup' && (() => {
                 const blockers: string[] = []
                 if (!isStreaming) blockers.push('Start Preview first')
@@ -400,8 +409,44 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
             )}
           </div>
 
-          {/* Right column: integrations, triggers, event log (inside same card) */}
-          <div className="lg:col-span-1 space-y-4">
+          {/* Right column: status + integrations + triggers + event log */}
+          <div className="lg:col-span-1 space-y-3 flex flex-col">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-sm space-y-1">
+              <div className="font-semibold flex items-center gap-2">Status</div>
+              {view === 'setup' && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+                    <span>{isStreaming ? 'Preview running' : 'Idle'}</span>
+                  </div>
+                  <div className="text-gray-500">Resolution: {resolution.width}×{resolution.height}</div>
+                  <div className="text-gray-500">ROIs drawn: {rois.length}</div>
+                  <div className="text-gray-500">Output: <code className="text-xs">{outputDir}</code></div>
+                </>
+              )}
+              {view === 'live' && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span>Recording</span>
+                  </div>
+                  <div className="text-gray-500">exp_id: <code className="text-xs">{expId}</code></div>
+                  <div className="text-gray-500">FPS: {liveFps != null ? liveFps.toFixed(1) : '—'}</div>
+                  <div className="text-gray-500">Frames: {liveFrames ?? 0}</div>
+                  <div className="text-gray-500">Active ROI: {activeRoi ?? '—'}</div>
+                </>
+              )}
+              {view === 'done' && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
+                    <span>Stopped</span>
+                  </div>
+                  <div className="text-gray-500">exp_id: <code className="text-xs">{expId}</code></div>
+                  <div className="text-gray-500">Frames: {liveFrames ?? 0}</div>
+                </>
+              )}
+            </div>
             <IntegrationsPanel />
             {view === 'live' && expId
               ? <TriggersPanel expId={expId} />

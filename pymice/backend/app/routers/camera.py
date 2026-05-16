@@ -149,16 +149,30 @@ def stop_watchdog() -> None:
 
 @router.get("/devices")
 async def list_devices():
-    """List available camera devices"""
-    devices = []
-    for i in range(10):  # Check first 10 devices
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            devices.append(i)
-            cap.release()
-        else:
-            break
+    """List available camera devices.
 
+    Probes indices 0..9. UVC cameras (e.g. Logitech C920) often expose
+    multiple /dev/videoN nodes per physical camera — one for capture, one
+    for metadata/control — and the capture node is not always index 0.
+    We therefore probe every index instead of stopping at the first gap.
+
+    Each probe is followed by an explicit release() so we don't hold a
+    handle on a device we don't intend to use.
+    """
+    devices = []
+    for i in range(10):
+        cap = cv2.VideoCapture(i)
+        try:
+            if cap.isOpened():
+                # Smoke-read: a node that opens but can't deliver a frame
+                # (e.g. a UVC metadata sub-device) is not useful to us.
+                ok, _ = cap.read()
+                if ok:
+                    devices.append(i)
+                else:
+                    logger.debug("device %d opens but does not deliver frames; skipping", i)
+        finally:
+            cap.release()
     return ApiResponse(success=True, data={"devices": devices})
 
 

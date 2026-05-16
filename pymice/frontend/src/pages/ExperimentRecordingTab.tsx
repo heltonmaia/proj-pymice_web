@@ -289,7 +289,11 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
                 {t}
               </button>
             ))}
-            <button onClick={() => setRois([])} className="px-3 py-1 rounded text-sm border ml-auto">
+            <button
+              onClick={() => setRois([])}
+              disabled={rois.length === 0}
+              className="px-3 py-1 rounded text-sm border bg-white dark:bg-gray-700 disabled:opacity-40"
+            >
               Clear ROIs
             </button>
           </div>

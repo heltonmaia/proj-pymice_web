@@ -173,8 +173,8 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
           <Camera className="w-5 h-5 text-primary-500" />
           Experiment Recording
@@ -276,104 +276,97 @@ export default function ExperimentRecordingTab({ onTrackingStateChange }: Props 
           </div>
         </div>
 
-        {view === 'setup' && isStreaming && (
-          <div className="flex gap-2 mb-3">
-            {(['Rectangle', 'Circle', 'Polygon'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTool(t)}
-                className={`px-3 py-1 rounded text-sm border ${
-                  tool === t ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-700'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-            <button
-              onClick={() => setRois([])}
-              disabled={rois.length === 0}
-              className="px-3 py-1 rounded text-sm border bg-white dark:bg-gray-700 disabled:opacity-40"
-            >
-              Clear ROIs
-            </button>
-          </div>
-        )}
-
-        <ROICanvas
-          width={resolution.width}
-          height={resolution.height}
-          rois={rois}
-          onRoisChange={setRois}
-          mode={view === 'live' ? 'live-overlay' : view === 'done' ? 'view-only' : 'edit'}
-          activeRoiIndex={activeRoi}
-          backgroundFrame={bgImage}
-          tool={tool}
-        />
-
-        <div className="mt-4 flex gap-3">
-          {view === 'setup' && (
-            <button
-              onClick={startExperiment}
-              disabled={!isStreaming || rois.length === 0 || !selectedModel}
-              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-4 py-2 rounded flex items-center gap-2"
-            >
-              <Play className="w-4 h-4" /> Start Recording
-            </button>
-          )}
-          {view === 'live' && (
-            <button
-              onClick={stopExperiment}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded flex items-center gap-2"
-            >
-              <StopCircle className="w-4 h-4" /> Stop Recording
-            </button>
-          )}
-          {view === 'done' && (
-            <button onClick={reset} className="bg-primary-600 text-white px-4 py-2 rounded">
-              New Recording
-            </button>
-          )}
-        </div>
-
-        {view === 'done' && artifacts && expId && (
-          <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded">
-            <h3 className="font-medium mb-2">Artifacts</h3>
-            <ul className="space-y-1 text-sm">
-              {(['raw.mp4', 'tracking.jsonl', 'events.jsonl', 'metadata.json'] as const).map((a) => (
-                <li key={a}>
-                  <a
-                    href={experimentApi.artifactUrl(expId, a)}
-                    download
-                    className="text-primary-600 hover:underline inline-flex items-center gap-1"
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column: tool bar, canvas, recording controls, artifacts */}
+          <div className="lg:col-span-2 space-y-3">
+            {view === 'setup' && isStreaming && (
+              <div className="flex gap-2">
+                {(['Rectangle', 'Circle', 'Polygon'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTool(t)}
+                    className={`px-3 py-1 rounded text-sm border ${
+                      tool === t ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-700'
+                    }`}
                   >
-                    <Download className="w-3 h-3" /> {a}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+                    {t}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setRois([])}
+                  disabled={rois.length === 0}
+                  className="px-3 py-1 rounded text-sm border bg-white dark:bg-gray-700 disabled:opacity-40"
+                >
+                  Clear ROIs
+                </button>
+              </div>
+            )}
 
-      <div className="space-y-6 lg:col-span-1">
-        {view === 'setup' && (
-          <>
+            <ROICanvas
+              width={resolution.width}
+              height={resolution.height}
+              rois={rois}
+              onRoisChange={setRois}
+              mode={view === 'live' ? 'live-overlay' : view === 'done' ? 'view-only' : 'edit'}
+              activeRoiIndex={activeRoi}
+              backgroundFrame={bgImage}
+              tool={tool}
+            />
+
+            <div className="flex gap-3">
+              {view === 'setup' && (
+                <button
+                  onClick={startExperiment}
+                  disabled={!isStreaming || rois.length === 0 || !selectedModel}
+                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-4 py-2 rounded flex items-center gap-2"
+                >
+                  <Play className="w-4 h-4" /> Start Recording
+                </button>
+              )}
+              {view === 'live' && (
+                <button
+                  onClick={stopExperiment}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded flex items-center gap-2"
+                >
+                  <StopCircle className="w-4 h-4" /> Stop Recording
+                </button>
+              )}
+              {view === 'done' && (
+                <button onClick={reset} className="bg-primary-600 text-white px-4 py-2 rounded">
+                  New Recording
+                </button>
+              )}
+            </div>
+
+            {view === 'done' && artifacts && expId && (
+              <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded">
+                <h3 className="font-medium mb-2">Artifacts</h3>
+                <ul className="space-y-1 text-sm">
+                  {(['raw.mp4', 'tracking.jsonl', 'events.jsonl', 'metadata.json'] as const).map((a) => (
+                    <li key={a}>
+                      <a
+                        href={experimentApi.artifactUrl(expId, a)}
+                        download
+                        className="text-primary-600 hover:underline inline-flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" /> {a}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Right column: integrations, triggers, event log (inside same card) */}
+          <div className="lg:col-span-1 space-y-4">
             <IntegrationsPanel />
-            <TriggersPanel disabled />
-          </>
-        )}
-        {view === 'live' && expId && (
-          <>
-            <IntegrationsPanel />
-            <TriggersPanel expId={expId} />
-            <EventLogPanel events={events} />
-          </>
-        )}
-        {view === 'done' && (
-          <>
-            <IntegrationsPanel />
-          </>
-        )}
+            {view === 'live' && expId
+              ? <TriggersPanel expId={expId} />
+              : <TriggersPanel disabled />}
+            {view === 'live' && <EventLogPanel events={events} />}
+          </div>
+        </div>
       </div>
 
       {showFolderPicker && (

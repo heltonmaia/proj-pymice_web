@@ -6,6 +6,14 @@ from fastapi.staticfiles import StaticFiles
 import os
 import shutil
 
+# Hide an unsupported GPU before any model code runs, so SAM3/Ultralytics/our own
+# device picks all fall back to CPU instead of crashing on an arch this PyTorch
+# build can't target (e.g. RTX 5060 Ti sm_120). No-op when the GPU is usable/absent.
+from app.utils.device import disable_cuda_if_unsupported
+
+if disable_cuda_if_unsupported():
+    print("[startup] GPU arch unsupported by this PyTorch build — hiding CUDA; running on CPU.")
+
 from app.routers import camera, video, tracking, roi, analysis, system, experiment
 
 app = FastAPI(

@@ -42,6 +42,21 @@ dev = [
     "isort>=5.0.0",
     "flake8>=6.0.0",
 ]
+sam3 = [
+    # Runtime deps for the optional SAM3 video model dropped into temp/models/sam3/
+    # (the SAM3 package itself is a manual drop-in, not on PyPI). SAM3's
+    # model_builder imports pkg_resources, which only ships with setuptools<81 —
+    # do not unpin or the import silently fails (SAM3_AVAILABLE=False).
+    "setuptools<81",
+    "huggingface_hub",
+    "iopath",
+    "einops",
+    "timm",
+    "decord",
+    "pycocotools",
+    "ftfy",
+    "regex",
+]
 
 [build-system]
 requires = ["hatchling"]

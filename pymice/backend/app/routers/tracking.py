@@ -36,6 +36,8 @@ except ImportError as e:
     print(f"Warning: sam3 implementation not found in temp/models: {e}")
     SAM3_AVAILABLE = False
 
+from app.utils.device import cuda_is_usable
+
 from app.models.schemas import (
     ApiResponse,
     TrackingRequest,
@@ -373,7 +375,7 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
 
     try:
         # Detect GPU availability
-        if torch.cuda.is_available():
+        if cuda_is_usable():
             device = "cuda"
             # Initial GPU cleanup before starting
             cleanup_gpu_memory(force=True)
@@ -829,7 +831,7 @@ def run_tracking_task(task_id: str, request: TrackingRequest):
             pass
 
         # Final GPU cleanup
-        if torch.cuda.is_available():
+        if cuda_is_usable():
             try:
                 cleanup_gpu_memory(force=True)
                 gc.collect()
@@ -897,7 +899,7 @@ def run_test_detection_task(task_id: str, request: TrackingRequest):
 
     try:
         # Detect GPU availability
-        if torch.cuda.is_available():
+        if cuda_is_usable():
             device = "cuda"
             cleanup_gpu_memory(force=True)
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -1163,7 +1165,7 @@ def run_test_detection_task(task_id: str, request: TrackingRequest):
             pass
 
         # GPU cleanup
-        if torch.cuda.is_available():
+        if cuda_is_usable():
             try:
                 torch.cuda.synchronize()
                 cleanup_gpu_memory(force=True)

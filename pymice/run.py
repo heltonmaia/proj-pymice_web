@@ -346,6 +346,52 @@ def restart() -> None:
     start()
 
 
+# --- Commands: update / menu ------------------------------------------------
+def update() -> None:
+    print(colorize("⬇ git pull...", BLUE))
+    result = subprocess.run(["git", "-C", str(REPO_ROOT), "pull"])
+    if result.returncode == 0:
+        print(colorize("✓ Updated.", GREEN))
+    else:
+        print(colorize("✗ git pull failed.", RED))
+        sys.exit(result.returncode)
+
+
+MENU_TEXT = """
+PyMice Web — control
+  1) Start      2) Stop       3) Restart    4) Status
+  5) Backend logs   6) Frontend logs   7) Clean
+  0) Exit
+"""
+
+
+def menu() -> None:
+    actions = {
+        "1": start,
+        "2": stop,
+        "3": restart,
+        "4": status,
+        "5": lambda: show_logs("backend"),
+        "6": lambda: show_logs("frontend"),
+        "7": clean,
+    }
+    while True:
+        print(colorize(MENU_TEXT, CYAN))
+        try:
+            choice = input("Choose: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if choice == "0":
+            return
+        action = actions.get(choice)
+        if action is None:
+            print(colorize("Invalid option.", RED))
+            continue
+        action()
+        input("\nPress Enter to continue...")
+
+
 # --- Entry point -------------------------------------------------------------
 def main(argv=None) -> None:
     _enable_windows_ansi()

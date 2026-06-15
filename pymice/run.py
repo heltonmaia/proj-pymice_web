@@ -204,6 +204,148 @@ def show_logs(service: str) -> None:
     print("\n".join(lines))
 
 
+# --- Process control ---------------------------------------------------------
+def _popen_detached(cmd, cwd: Path, log_path: Path) -> subprocess.Popen:
+    log_f = open(log_path, "ab")
+    kwargs = dict(
+        cwd=str(cwd),
+        stdout=log_f,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+    )
+    if IS_WINDOWS:
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        kwargs["start_new_session"] = True
+    return subprocess.Popen(cmd, **kwargs)
+
+
+def _terminate_pid(pid: int) -> None:
+    """Graceful stop: SIGTERM the whole process group (lets the backend tear down
+    its camera). On Windows, taskkill /T kills the process tree."""
+    if IS_WINDOWS:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _kill_pid(pid: int) -> None:
+    """Force-kill the process group (POSIX SIGKILL); taskkill already forced on Windows."""
+    if IS_WINDOWS:
+        return
+    try:
+        os.killpg(os.getpgid(pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _wait_port_free(port: int, timeout: float) -> bool:
+    """Poll until the port is released, up to `timeout` seconds."""
+    steps = max(1, int(timeout / 0.2))
+    for _ in range(steps):
+        if not port_in_use(port):
+            return True
+        time.sleep(0.2)
+    return not port_in_use(port)
+
+
+# --- Commands: start / stop / restart ---------------------------------------
+def start() -> None:
+    if port_in_use(BACKEND_PORT) and port_in_use(FRONTEND_PORT):
+        print(colorize("⚠ Services already running.", YELLOW))
+        status()
+        return
+
+    venv = require_venv()
+    npm = shutil.which("npm")
+    if shutil.which("node") is None or npm is None:
+        print(colorize("✗ node/npm not found in PATH.", RED))
+        sys.exit(1)
+
+    clean()
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    for sub in ("videos", "models", "tracking", "analysis"):
+        (BACKEND_DIR / "temp" / sub).mkdir(parents=True, exist_ok=True)
+
+    if not port_in_use(BACKEND_PORT):
+        print(colorize("🐍 Starting backend...", BLUE))
+        # Invoke via `python -m uvicorn` (not the uvicorn console-script): the
+        # venv's console-scripts carry a stale shebang from a prior venv path,
+        # so exec'ing them fails; `python -m` uses the interpreter directly.
+        proc = _popen_detached(
+            [str(venv_exe(venv, "python")), "-m", "uvicorn", "app.main:app",
+             "--host", "0.0.0.0", "--port", str(BACKEND_PORT)],
+            cwd=BACKEND_DIR,
+            log_path=BACKEND_LOG,
+        )
+        BACKEND_PID.write_text(str(proc.pid))
+        print(colorize(f"✓ Backend started (PID {proc.pid})", GREEN))
+
+    if not port_in_use(FRONTEND_PORT):
+        if not (FRONTEND_DIR / "node_modules").exists():
+            print("  Installing frontend deps (npm install)...")
+            subprocess.run([npm, "install"], cwd=str(FRONTEND_DIR), check=False)
+        print(colorize("⚛ Starting frontend...", BLUE))
+        proc = _popen_detached(
+            [npm, "run", "dev", "--", "--host", "0.0.0.0", "--port", str(FRONTEND_PORT)],
+            cwd=FRONTEND_DIR,
+            log_path=FRONTEND_LOG,
+        )
+        FRONTEND_PID.write_text(str(proc.pid))
+        print(colorize(f"✓ Frontend started (PID {proc.pid})", GREEN))
+
+    print()
+    print(colorize(f"📱 Open: http://localhost:{FRONTEND_PORT}", CYAN))
+
+
+def stop() -> None:
+    print(colorize("🛑 Stopping PyMice Web...", YELLOW))
+    targets = []  # (name, pid, port)
+    for name, pidfile, port in (
+        ("Backend", BACKEND_PID, BACKEND_PORT),
+        ("Frontend", FRONTEND_PID, FRONTEND_PORT),
+    ):
+        pid = _read_pid(pidfile)
+        if pid is not None:
+            print(f"  Stopping {name} (PID {pid})...")
+            _terminate_pid(pid)  # SIGTERM the group first
+            targets.append((name, pid, port))
+        pidfile.unlink(missing_ok=True)
+
+    if not targets:
+        print(colorize("⚠ Nothing was running.", YELLOW))
+        return
+
+    # Give each service a graceful window to release its port; vite in
+    # particular lingers a beat after SIGTERM. Force-kill stragglers.
+    for name, pid, port in targets:
+        if not _wait_port_free(port, timeout=6.0):
+            print(colorize(f"  {name} slow to exit — forcing...", YELLOW))
+            _kill_pid(pid)
+            _wait_port_free(port, timeout=3.0)
+
+    still = [name for name, pid, port in targets if port_in_use(port)]
+    if still:
+        print(colorize(f"⚠ Still bound: {', '.join(still)} — check manually.", YELLOW))
+    else:
+        print(colorize("✓ Services stopped.", GREEN))
+
+
+def restart() -> None:
+    stop()
+    time.sleep(2)
+    start()
+
+
 # --- Entry point -------------------------------------------------------------
 def main(argv=None) -> None:
     _enable_windows_ansi()

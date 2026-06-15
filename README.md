@@ -12,31 +12,28 @@ Modern web application for mouse tracking and behavioral analysis using React + 
 
 ### Recommended Method: Unified Script
 
-The project includes a unified `run.sh` script that automatically manages the entire environment:
+The project includes a unified `run.py` script (Python standard library only, cross-platform) that manages the entire environment:
 
 ```bash
-# Make script executable (first time)
-chmod +x run.sh
-
-# Start frontend + backend
-./run.sh start
+# Start frontend + backend (run from pymice/)
+python run.py start
 
 # Check services status
-./run.sh status
+python run.py status
 
 # Stop services
-./run.sh stop
+python run.py stop
 
 # Restart
-./run.sh restart
+python run.py restart
 
 # Interactive menu
-./run.sh
+python run.py
 ```
 
 **UV Virtual Environment:**
 - Backend uses a UV environment located in `uv-env/`
-- `run.sh` automatically activates the correct environment
+- `run.py` locates the venv automatically (uv-env / .venv / $PYMICE_VENV) — no manual activation needed
 - Includes PyTorch 2.6.0 with CUDA 12.4 support
 
 **Check GPU:**

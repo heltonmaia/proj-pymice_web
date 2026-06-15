@@ -33,7 +33,7 @@ proj-pymice_web/
 │   │       ├── services/api.ts # Axios client, all backend endpoints
 │   │       └── components, hooks, types, utils
 │   ├── logs/             # Runtime logs (backend.log, frontend.log, *.pid)
-│   ├── run.sh            # Unified start/stop/status script
+│   ├── run.py            # Unified cross-platform start/stop/status script (stdlib)
 │   └── setup_backend.sh  # Backend environment setup
 ├── docs/                 # Project positioning notes (diferenciais.md + .tex/PDF build, in PT-BR)
 ├── uv-env  → /mnt/hd3/uv-common/pymice-react-venv   (symlink to UV virtualenv)
@@ -47,9 +47,9 @@ proj-pymice_web/
 - **GPU check:** `python -c "import torch; print(torch.cuda.is_available())"`.
 
 ## Running
-- Preferred: `./pymice/run.sh start` (also: `status`, `stop`, `restart`, `clean`, `logs [backend|frontend]`, or run with no args for interactive menu). `run.sh` uses relative paths, so launch it from `pymice/`. A `run.bat` exists for Windows; keep it in sync if you change `run.sh` semantics.
-- **`run.sh` does not activate the venv** — it requires `$VIRTUAL_ENV` to already be set and will exit with an error otherwise. Activate `uv-env/bin/activate` first. (README.md claims `run.sh` auto-activates the environment — that is stale; trust this file.)
-- `run.sh start` also calls `clean_temporaries` and the backend `startup_event` clears `temp/{videos,tracking,analysis,roi_templates}` (files >1h old) — anything you stage there for debugging may be wiped on next start. **Preserved across restarts:** `temp/models/*.pt`, `temp/experiments/` (user recordings), and `temp/integrations.json` (hardware bindings). On startup, `_mark_orphan_experiments()` also rewrites any `temp/experiments/*/metadata.json` whose `state == "running"` to `"crashed"` (covers a previous run that died mid-experiment).
+- Preferred: `python pymice/run.py start` (also: `status`, `stop`, `restart`, `clean`, `logs [backend|frontend]`, `update`, or run with no args for interactive menu). `run.py` is stdlib-only and resolves every path from its own location, so it runs from any CWD. It is the single cross-platform entry point (the old `run.sh`/`run.bat` were removed).
+- **`run.py` locates the venv itself** — it searches `uv-env`/`.venv` (repo root, then `pymice/`) and `$PYMICE_VENV`, then launches the backend via that venv's `python -m uvicorn`. No `source .../activate` needed; invoke it with the system Python. (It deliberately uses `python -m uvicorn`, not the venv's `uvicorn` console-script, whose shebang is stale from a prior venv path and fails to exec.)
+- `run.py start` also runs its `clean()` step and the backend `startup_event` clears `temp/{videos,tracking,analysis,roi_templates}` (files >1h old) — anything you stage there for debugging may be wiped on next start. **Preserved across restarts:** `temp/models/*.pt`, `temp/experiments/` (user recordings), and `temp/integrations.json` (hardware bindings). On startup, `_mark_orphan_experiments()` also rewrites any `temp/experiments/*/metadata.json` whose `state == "running"` to `"crashed"` (covers a previous run that died mid-experiment).
 - **Camera lifecycle:** the cv2 capture in `camera_state["stream"]` is shared with the experiment loop. A daemon watchdog (`start_watchdog` in `app/routers/camera.py`) releases the cap if no `/api/camera/frame` request arrives for ~30s — this catches "user closed the tab" so the camera LED stops staying on. On SIGTERM/SIGINT, shutdown order is **experiment → camera → watchdog** (the loop reads the camera, so it must stop first); preserve this ordering if you touch `app/main.py`'s `shutdown_event`.
 - Ports: Frontend dev http://localhost:5765 — Backend http://localhost:8765 — Docs http://localhost:8765/docs.
 - Vite proxies `/api/*` → `http://localhost:8765` (see `frontend/vite.config.ts`); the frontend axios client uses `baseURL: '/api'`, so both dev and prod talk to the same paths.
@@ -82,7 +82,7 @@ CORS is hard-coded to `http://localhost:3000` and `http://localhost:5765` — up
 - Frontend styling: Tailwind utility classes; dark mode is class-based (`dark:` variants throughout) and toggled via `components/ThemeToggle.tsx` + `hooks/useTheme.ts`. Avoid ad-hoc CSS unless necessary.
 - Frontend path alias: `@/` → `src/` (set in `vite.config.ts` and `tsconfig.json`). Use it for cross-tree imports.
 - Backend: follow FastAPI conventions (routers in `app/routers`, Pydantic schemas in `app/models`, processing/CV/ML logic in `app/processing`, cross-router runtime services in `app/services` — currently `event_bus.py` and `integrations.py`). `app/utils` exists but is empty; put pure helpers there rather than inline in routers.
-- Be mindful of CWD when running scripts — `run.sh` lives in `pymice/`, not the repo root, and the backend resolves `temp/` relative to `pymice/backend/`.
+- `run.py` resolves its own paths, so it runs from any CWD — but the backend still resolves `temp/` relative to `pymice/backend/`, so be mindful of CWD when launching the backend manually (e.g. `uvicorn`).
 
 ## Domain notes
 - **Heatmap:** **Power Normalization** with gamma=0.4 to expand low-density regions; colorbar is normalized 0–1. Don't switch to linear without a reason — it makes low-traffic areas invisible next to hotspots.

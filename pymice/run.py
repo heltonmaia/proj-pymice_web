@@ -359,8 +359,13 @@ def update() -> None:
 
 MENU_TEXT = """
 PyMice Web — control
-  1) Start      2) Stop       3) Restart    4) Status
-  5) Backend logs   6) Frontend logs   7) Clean
+  1) Start
+  2) Stop
+  3) Restart
+  4) Status
+  5) Backend logs
+  6) Frontend logs
+  7) Clean
   0) Exit
 """
 

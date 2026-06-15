@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Architecture:** Monorepo under `pymice/` with a FastAPI backend and a React + TypeScript frontend.
 
 ## Stack
-- **Frontend:** React 18 + TypeScript, Vite, TailwindCSS, Axios, Lucide React, Zustand (state), React Query, React-Konva (interactive ROI drawing), Recharts.
+- **Frontend:** React 18 + TypeScript, Vite, TailwindCSS, Axios, Lucide React, React Query (provider mounted at root; per-page state is local `useState`), React-Konva (interactive ROI drawing), Recharts. Note: `zustand` is in `package.json` but currently unused — `frontend/src/store/` is empty.
 - **Backend:** Python 3.11, FastAPI, Pydantic, PyTorch 2.6.0 (CUDA 12.4), Ultralytics 8.3.102 (YOLO), OpenCV, ffmpeg/ffprobe. Optional SAM3 support (see Domain notes).
-- **Python packaging:** `uv` (always — do not use pip/poetry/conda for this repo). `pymice/backend/requirements.txt` is kept only as a fallback/reference; `pyproject.toml` + `uv.lock` are the source of truth.
+- **Python packaging:** `uv` (always — do not use pip/poetry/conda for this repo). `pymice/backend/requirements.txt` is kept only as a fallback/reference; `pyproject.toml` + `uv.lock` are the source of truth. The ML stack is **optional extras**, not core deps: `gpu` (torch/torchvision/torchaudio 2.6.0), `yolo` (ultralytics), `dev` (pytest/black/isort/flake8). A from-scratch install needs `uv pip install -e '.[gpu,yolo,dev]'` from `pymice/backend/` — the shared `uv-env` already has them.
 
 ## Layout
 ```
@@ -35,6 +35,7 @@ proj-pymice_web/
 │   ├── logs/             # Runtime logs (backend.log, frontend.log, *.pid)
 │   ├── run.sh            # Unified start/stop/status script
 │   └── setup_backend.sh  # Backend environment setup
+├── docs/                 # Project positioning notes (diferenciais.md + .tex/PDF build, in PT-BR)
 ├── uv-env  → /mnt/hd3/uv-common/pymice-react-venv   (symlink to UV virtualenv)
 ├── .venv   → same target as uv-env
 └── README.md
@@ -47,8 +48,9 @@ proj-pymice_web/
 
 ## Running
 - Preferred: `./pymice/run.sh start` (also: `status`, `stop`, `restart`, `clean`, `logs [backend|frontend]`, or run with no args for interactive menu). `run.sh` uses relative paths, so launch it from `pymice/`. A `run.bat` exists for Windows; keep it in sync if you change `run.sh` semantics.
-- **`run.sh` does not activate the venv** — it requires `$VIRTUAL_ENV` to already be set and will exit with an error otherwise. Activate `uv-env/bin/activate` first.
-- `run.sh start` also calls `clean_temporaries` and the backend `startup_event` clears `temp/{videos,tracking,analysis,roi_templates}` (files >1h old) — anything you stage there for debugging may be wiped on next start. `temp/models/*.pt` is explicitly preserved.
+- **`run.sh` does not activate the venv** — it requires `$VIRTUAL_ENV` to already be set and will exit with an error otherwise. Activate `uv-env/bin/activate` first. (README.md claims `run.sh` auto-activates the environment — that is stale; trust this file.)
+- `run.sh start` also calls `clean_temporaries` and the backend `startup_event` clears `temp/{videos,tracking,analysis,roi_templates}` (files >1h old) — anything you stage there for debugging may be wiped on next start. **Preserved across restarts:** `temp/models/*.pt`, `temp/experiments/` (user recordings), and `temp/integrations.json` (hardware bindings). On startup, `_mark_orphan_experiments()` also rewrites any `temp/experiments/*/metadata.json` whose `state == "running"` to `"crashed"` (covers a previous run that died mid-experiment).
+- **Camera lifecycle:** the cv2 capture in `camera_state["stream"]` is shared with the experiment loop. A daemon watchdog (`start_watchdog` in `app/routers/camera.py`) releases the cap if no `/api/camera/frame` request arrives for ~30s — this catches "user closed the tab" so the camera LED stops staying on. On SIGTERM/SIGINT, shutdown order is **experiment → camera → watchdog** (the loop reads the camera, so it must stop first); preserve this ordering if you touch `app/main.py`'s `shutdown_event`.
 - Ports: Frontend dev http://localhost:5765 — Backend http://localhost:8765 — Docs http://localhost:8765/docs.
 - Vite proxies `/api/*` → `http://localhost:8765` (see `frontend/vite.config.ts`); the frontend axios client uses `baseURL: '/api'`, so both dev and prod talk to the same paths.
 - Logs: `tail -f pymice/logs/*.log`.
@@ -88,4 +90,5 @@ CORS is hard-coded to `http://localhost:3000` and `http://localhost:5765` — up
 - **Tracking pipeline:** YOLO detection first (Ultralytics), with background-subtraction + template matching as a fallback when YOLO misses; both methods are recorded in the per-frame `detection_method` field. ROIs support Rectangle, Circle, Polygon and can be saved/loaded as templates under `temp/roi_templates`.
 - **SAM3 (optional):** `app/routers/tracking.py` adds `temp/models/` to `sys.path` and tries `from sam3.model_builder import build_sam3_video_model`. If the package isn't dropped into `temp/models/sam3/`, `SAM3_AVAILABLE` is False and SAM3-specific endpoints degrade — this is expected, not a bug.
 - **Results export:** JSON with ffmpeg-derived timestamps, centroids, active ROI per frame, detection method, and aggregate statistics. The frontend streams large JSONs via `/api/analysis/upload-large-json` (10-minute timeout) — don't try to load multi-hundred-MB results through the synchronous endpoint.
-- **Experiment Recording (live):** `app/processing/live_experiment.py` owns a daemon-thread loop that consumes `camera_state["stream"]`, runs YOLO per frame, writes raw video + tracking JSONL + events JSONL into `temp/experiments/<exp_id>/`, and emits events to `EventBus`. The router (`app/routers/experiment.py`) exposes lifecycle endpoints and the WebSocket. Hardware bindings (Arduino serial, ESP32 HTTP) live in `app/services/integrations.py` and persist in `temp/integrations.json`. **Singleton:** one experiment per process — `POST /start` is 409 if another is running. **Annotated display:** the loop writes the annotated frame into `camera_state["annotated_frame"]`; `/api/camera/frame` prefers it when present, so the existing frontend polling shows overlays without a new endpoint.
+- **Experiment Recording (live):** `app/processing/live_experiment.py` owns a daemon-thread loop that consumes `camera_state["stream"]`, runs YOLO per frame, writes raw video + tracking JSONL + events JSONL + `metadata.json` into `temp/experiments/<exp_id>/`, and emits events to `EventBus`. The router (`app/routers/experiment.py`) exposes lifecycle endpoints and the WebSocket. Hardware bindings (Arduino serial, ESP32 HTTP) live in `app/services/integrations.py` and persist in `temp/integrations.json`. **Singleton:** one experiment per process — `POST /start` is 409 if another is running. **Annotated display:** the loop writes the annotated frame into `camera_state["annotated_frame"]`; `/api/camera/frame` prefers it when present, so the existing frontend polling shows overlays without a new endpoint. **Crash recovery:** see the orphan-marking note in *Running* above.
+- **GPU fallback:** at experiment start the backend probes whether PyTorch supports the local GPU arch and falls back to CPU when not (see commit `0e4e33a`). Tracking still runs, just slower — don't treat CPU mode as an error.

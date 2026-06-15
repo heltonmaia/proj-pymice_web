@@ -147,3 +147,72 @@ COMMANDS = {
     "update": lambda args: update(),
     "menu": lambda args: menu(),
 }
+
+
+# --- Process control: pid files ----------------------------------------------
+def _read_pid(pidfile: Path):
+    try:
+        return int(pidfile.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+# --- Commands: clean / status / logs ----------------------------------------
+def clean() -> None:
+    print(colorize("🧹 Cleaning temporaries...", YELLOW))
+    for cache in BACKEND_DIR.rglob("__pycache__"):
+        shutil.rmtree(cache, ignore_errors=True)
+    for pyc in BACKEND_DIR.rglob("*.pyc"):
+        pyc.unlink(missing_ok=True)
+    for target in clean_dir_targets(BACKEND_DIR, LOG_DIR):
+        if target.exists():
+            for child in target.iterdir():
+                if child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    child.unlink(missing_ok=True)
+        else:
+            target.mkdir(parents=True, exist_ok=True)
+    print(colorize("✓ Clean done (models, experiments, integrations.json preserved).", GREEN))
+
+
+def status() -> None:
+    print(colorize("📊 PyMice Web status", BLUE))
+    for name, port, pidfile in (
+        ("Backend", BACKEND_PORT, BACKEND_PID),
+        ("Frontend", FRONTEND_PORT, FRONTEND_PID),
+    ):
+        if port_in_use(port):
+            pid = _read_pid(pidfile)
+            suffix = f" (PID {pid})" if pid else ""
+            print(f"  {name}: {colorize('● RUNNING', GREEN)} on {port}{suffix}")
+        else:
+            print(f"  {name}: {colorize('○ STOPPED', RED)}")
+    print()
+    print(f"  Frontend:    http://localhost:{FRONTEND_PORT}")
+    print(f"  Backend API: http://localhost:{BACKEND_PORT}")
+    print(f"  API Docs:    http://localhost:{BACKEND_PORT}/docs")
+
+
+def show_logs(service: str) -> None:
+    log_path = {"backend": BACKEND_LOG, "frontend": FRONTEND_LOG}[service]
+    lines = tail_lines(log_path)
+    if lines is None:
+        print(colorize(f"✗ No log file at {log_path}", RED))
+        return
+    print(colorize(f"📝 Last {len(lines)} lines of {service} log:", BLUE))
+    print("\n".join(lines))
+
+
+# --- Entry point -------------------------------------------------------------
+def main(argv=None) -> None:
+    _enable_windows_ansi()
+    args = build_parser().parse_args(argv)
+    if args.command is None:
+        menu()
+        return
+    COMMANDS[args.command](args)
+
+
+if __name__ == "__main__":
+    main()
